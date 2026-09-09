@@ -9,14 +9,14 @@ The skill requires the canonical task reviewer, runs trial/spec analysis separat
 ### Codex
 
 ```bash
-git clone org-272075201@github.com:codimango/codimango-review-critic.git \
+git clone https://github.com/kngreen/codimango-review-critic.git \
   ~/.codex/skills/codimango-review-critic
 ```
 
 ### Claude Code
 
 ```bash
-git clone org-272075201@github.com:codimango/codimango-review-critic.git \
+git clone https://github.com/kngreen/codimango-review-critic.git \
   ~/.claude/skills/codimango-review-critic
 ```
 
