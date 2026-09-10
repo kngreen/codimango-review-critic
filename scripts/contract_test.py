@@ -324,7 +324,7 @@ class Fixture:
         write_json(supplemental_descriptor, descriptor)
         self.outputs["supplemental"] = supplemental_descriptor
         self.ledger["supplemental"] = {
-            "descriptor_path": str(supplemental_descriptor),
+            "descriptor_path": str(supplemental_descriptor.resolve()),
             "descriptor_sha256": sha256_file(supplemental_descriptor),
         }
         write_json(self.ledger_path, self.ledger)
@@ -355,7 +355,7 @@ class Fixture:
             "runner": runner,
             "session_id": session,
             "parent_session_id": parent,
-            "workspace": str(output.parent),
+            "workspace": str(output.parent.resolve()),
             "harness": "native",
             "loaded_skill": {
                 "canonical_primary": "aai-review-flow",
@@ -386,7 +386,7 @@ class Fixture:
                 0 if role == "critic" else (3 if role == "canonical_fallback" else 2)
             ),
             "ended_at": None if status == "finalizing" else timestamp(3),
-            "output_path": str(output) if completed else None,
+            "output_path": str(output.resolve()) if completed else None,
             "output_sha256": sha256_file(output) if completed else None,
             "output_task_id": TASK_ID if completed else None,
             "output_task_sha": TASK_SHA if completed else None,
@@ -447,27 +447,27 @@ class Fixture:
         final = {
             "owner_session_id": "critic-session",
             "review": {
-                "path": str(self.review_path),
+                "path": str(self.review_path.resolve()),
                 "sha256": sha256_file(self.review_path),
             },
             "live_payload": {
-                "path": str(self.live_path),
+                "path": str(self.live_path.resolve()),
                 "sha256": sha256_file(self.live_path),
             },
             "evidence": {
-                "path": str(self.evidence_path),
+                "path": str(self.evidence_path.resolve()),
                 "sha256": sha256_file(self.evidence_path),
             },
             "findings": {
-                "path": str(self.findings_path),
+                "path": str(self.findings_path.resolve()),
                 "sha256": sha256_file(self.findings_path),
             },
             "evidence_ledger": {
-                "path": str(self.ledger_path),
+                "path": str(self.ledger_path.resolve()),
                 "sha256": sha256_file(self.ledger_path),
             },
             "command_audit": {
-                "path": str(self.audit_path),
+                "path": str(self.audit_path.resolve()),
                 "sha256": sha256_file(self.audit_path),
             },
         }
@@ -501,7 +501,7 @@ class Fixture:
             },
             "final": final,
             "publisher": {
-                "source_path": str(self.review_path),
+                "source_path": str(self.review_path.resolve()),
                 "source_sha256": final["review"]["sha256"],
                 "published_path": None,
                 "published_sha256": None,
@@ -537,19 +537,19 @@ class Fixture:
             "sha256": sha256_file(self.conditions_path),
         }
         self.manifest["final"]["review"] = {
-            "path": str(self.review_path),
+            "path": str(self.review_path.resolve()),
             "sha256": sha256_file(self.review_path),
         }
         self.manifest["final"]["live_payload"] = {
-            "path": str(self.live_path),
+            "path": str(self.live_path.resolve()),
             "sha256": sha256_file(self.live_path),
         }
         self.manifest["final"]["findings"] = {
-            "path": str(self.findings_path),
+            "path": str(self.findings_path.resolve()),
             "sha256": sha256_file(self.findings_path),
         }
         self.manifest["final"]["evidence_ledger"] = {
-            "path": str(self.ledger_path),
+            "path": str(self.ledger_path.resolve()),
             "sha256": sha256_file(self.ledger_path),
         }
         self.manifest["publisher"]["source_path"] = str(self.review_path)

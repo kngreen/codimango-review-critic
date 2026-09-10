@@ -27,7 +27,7 @@ PYTHON = sys.executable
 
 def invoke(
     args: list[str],
-    expected: str,
+    expected: str | tuple[str, ...],
     cwd: Path = ROOT,
     expect: int = 0,
     env: dict[str, str] | None = None,
@@ -36,7 +36,12 @@ def invoke(
         args, cwd=cwd, text=True, capture_output=True, check=False, env=env
     )
     combined = proc.stdout + proc.stderr
-    if proc.returncode != expect or expected not in combined:
+    matched = (
+        expected in combined
+        if isinstance(expected, str)
+        else any(value in combined for value in expected)
+    )
+    if proc.returncode != expect or not matched:
         raise AssertionError(
             f"command {args!r} returned {proc.returncode}, expected {expect}; "
             f"missing {expected!r}\nstdout={proc.stdout}\nstderr={proc.stderr}"
@@ -921,13 +926,17 @@ def main() -> int:
                     "-c",
                     f"from pathlib import Path; Path({str(protected)!r}).write_text('changed')",
                 ],
-                "Read-only file system",
+                ("Read-only file system", "Operation not permitted"),
                 cwd=bundle,
                 expect=1,
             )
             if protected.read_text() != "original\n":
                 raise AssertionError("task repository was modified through audit_exec")
-            shm_probe = "/dev/shm/codimango-critic-write-probe"
+            shm_probe = (
+                "/dev/shm/codimango-critic-write-probe"
+                if sys.platform.startswith("linux")
+                else str(temp / "outside-scratch-write-probe")
+            )
             invoke(
                 [
                     PYTHON,
@@ -943,12 +952,12 @@ def main() -> int:
                     "-c",
                     f"from pathlib import Path; Path({shm_probe!r}).write_text('changed')",
                 ],
-                "Read-only file system",
+                ("Read-only file system", "Operation not permitted"),
                 cwd=bundle,
                 expect=1,
             )
             if Path(shm_probe).exists():
-                raise AssertionError("sandbox wrote through /dev/shm")
+                raise AssertionError("sandbox wrote outside scratch")
 
             print(
                 "INTEGRATION OK commands=23 final_sha256="

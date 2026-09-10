@@ -99,13 +99,29 @@ def macos_sandbox(
     def escaped(path: Path) -> str:
         return str(path).replace("\\", "\\\\").replace('"', '\\"')
 
+    temp_root = scratch / "tmp"
+    cache_root = scratch / "cache"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    cache_root.mkdir(parents=True, exist_ok=True)
     network = "" if Path(command[0]).name in OFFLINE_BINARIES else "(allow network*)"
     profile = (
         "(version 1)(deny default)(allow process*)(allow file-read*)"
-        f'(allow file-write* (subpath "{escaped(scratch)}")){network}'
+        f'(allow file-write* (subpath "{escaped(scratch)}"))'
+        '(allow file-write* (literal "/dev/null"))'
+        f"{network}"
         f'(deny file-write* (subpath "{escaped(task_repo)}"))'
     )
-    return [executable, "-p", profile, *command]
+    return [
+        executable,
+        "-p",
+        profile,
+        "/usr/bin/env",
+        f"TMPDIR={temp_root}",
+        f"DARWIN_USER_TEMP_DIR={temp_root}",
+        f"DARWIN_USER_CACHE_DIR={cache_root}",
+        f"XDG_CACHE_HOME={cache_root}",
+        *command,
+    ]
 
 
 def resolve_executable(command: list[str], task_repo: Path, scratch: Path) -> list[str]:
