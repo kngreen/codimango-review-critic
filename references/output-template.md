@@ -1,12 +1,14 @@
 # Canonical Codimango review form contract
 
-This file is part of the runtime input. A reviewer that cannot read it must stop with:
+This file is generated from `schema/review-format.json`. Edit the schema, then run:
+
+`python3 scripts/generate_template.py --write`
+
+A reviewer that cannot read this file must stop with:
 
 `Canonical review format could not be generated.`
 
-The author-facing review must contain all eight base sections below, in order. When an Agentic Full-Task Review exists for the reviewed SHA, it must also contain the conditional `Agentic Full-Task Review (MM)` section immediately after Novelty and before TBR. Do not replace the form with a Decision/Blockers summary. Fold any additional agentic evidence into the canonical fields.
-
-Every heading and field is mandatory, including fields whose value is `None`, `No finding`, `NOT VERIFIED`, `NO DATA`, or `Not applicable`. The complete form, not a substitute summary, must remain under 700 words.
+The author-facing review contains eight base sections in order. Conditional Agentic and Validation Override sections are inserted only when `conditions.json` marks them required. The complete form must remain under 700 words.
 
 ## Exact skeleton
 
@@ -15,70 +17,68 @@ Every heading and field is mandatory, including fields whose value is `None`, `N
 - **Verdict:** Accept / Revise / Reject / Unavailable
 - **Counts:** Critical N | High N | Medium N | Low N
 - **Reviewer Agrees?:** Agree / Partially / Disagree
-- **Notes:** Current-task findings and the strongest evidence, or `No finding`.
+- **Notes:** Current-task text / explicit unavailable state
 
 ### Contamination Review Agent
 - **Risk Level:** LOW / MEDIUM / HIGH / NONE / NOT VERIFIED
 - **Reviewer Agrees?:** Agree / Partially / Disagree
-- **Notes:** Actual lookup evidence, or `NOT VERIFIED: <reason>`.
+- **Notes:** Current-task text / explicit unavailable state
 
 ### Novelty Review Agent
 - **Risk Level:** LOW / MEDIUM / HIGH / NONE / NOT VERIFIED
 - **Reviewer Agrees?:** Agree / Partially / Disagree
-- **Notes:** Recall/public-source reasoning, or `NOT VERIFIED: <reason>`.
+- **Notes:** Current-task text / explicit unavailable state
 
+<!-- conditional: agentic -->
 ### Agentic Full-Task Review (MM)
 - **Reviewer Agrees?:** Agree / Partially / Disagree
-- **Notes:** Required when the reviewed SHA has an Agentic Full-Task Review. State whether its verdict, causal explanation, rubric findings, and attempt classifications survive independent verification.
+- **Notes:** Task-specific rationale
 
 ### TBR Review Agreement
 - **Reviewer Agrees?:** Agree / Partially / Disagree
 - **Disagreed Checks:** none / comma-separated snake_case check IDs / NOT VERIFIED
-- **Notes:** Material agreement or disagreement evidence, or `No finding`.
+- **Notes:** Current-task text / explicit unavailable state
+
+<!-- conditional: validation_override -->
+### Validation Override
+- **CHECK_HEADING**
+- **Submitter Reason:** Existing submitter rationale.
+- **Reviewer Agrees?:** Agree / Partially / Disagree
+- **Reviewer Notes:** Current-task evidence.
 
 ### Human Checks
 - **Realistic Scenario?:** 1 / 2 / 3 / 4
-- **Realistic Scenario Notes:** Task-specific engineering-scenario rationale.
+- **Realistic Scenario Notes:** Task-specific rationale
 - **Domain Expertise?:** 1 / 2 / 3 / 4
-- **Domain Expertise Notes:** Task-specific specialized-knowledge rationale.
+- **Domain Expertise Notes:** Task-specific rationale
 - **Original?:** 1 / 2 / 3 / 4
-- **Original Notes:** Task-specific novelty/public-source rationale.
-- **Primary Language:** One verified language token.
+- **Original Notes:** Task-specific rationale
+- **Primary Language:** One verified language token
 - **Other Languages:** Comma-separated languages / None
-- **Additional Notes:** Concise extra context / None
+- **Additional Notes:** Current-task text / explicit unavailable state
 
 ### Decision
 - **Decision:** Accept / Request changes / Reject
-- **Reason:** Current-state decision, severity counts, evidence, what must change, and observable close conditions.
-- **Follow-up needed?:** No / concise required action
+- **Reason:** Current-state counts, evidence, required changes, and close conditions
+- **Follow-up needed?:** Current-task text / explicit unavailable state
 
 ### Other Notes
-- **Notes:** `Strengths: ... To fix: ... To notice: ...` Use `None` only when no material caveat or context exists.
+- **Notes:** Strengths: ... To fix: ... To notice: ...
 
 ### Reviewer Confidence
 - **Confidence (1-5):** N - concise evidence-coverage rationale
+
 ```
 
 ## Content rules
 
-- Agentic Full-Task Review agreement is conditional, but mandatory whenever the live task exposes an Agentic Full-Task Review for the reviewed SHA. Use the serialized heading `Agentic Full-Task Review (MM)` and include both `Reviewer Agrees?` and `Notes`.
-- Every affirmative statement is already verified. State facts directly; never prefix them with `CONFIRMED`.
-- Use `NOT VERIFIED`, `NO DATA`, partial evidence, or uncertainty explicitly where applicable.
-- Human Check scores always include task-specific rationales.
-- Decision findings descend by severity and include current evidence plus a binary close condition.
-- Other Notes preserves missing artifacts, unrun baselines, revision mismatches, and other material caveats.
+- `conditions.json` decides whether Agentic and Validation Override are present. An unresolved condition blocks delivery.
+- Every affirmative statement is verified by evidence. Use `NOT VERIFIED` only for unavailable or uncertain evidence.
+- Human Check scores require task-specific rationales.
+- Decision findings descend by severity and include observable close conditions.
+- Other Notes preserves missing artifacts, unrun baselines, revision mismatches, and material caveats.
 - No batch comparisons, cross-task facts, review-history narration, reviewer self-history, `#thanks`, AI-speak, or em dashes.
 
 ## Validation
 
-Before calling the review paste-ready, run both:
-
-```bash
-python3 scripts/lint_final_review.py FINAL.md
-python3 scripts/validate_review_schema.py \
-  --template references/output-template.md \
-  --review FINAL.md \
-  [--agentic-required]
-```
-
-Both commands must exit 0. The schema validator prints every detected canonical section and field. Copy that output into the private evidence report. A missing, renamed, duplicated, reordered, merged, empty, or invalid-valued field blocks delivery.
+Run `python3 scripts/finalize_review.py --help`; only its approval receipt authorizes publication.

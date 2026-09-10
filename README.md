@@ -2,153 +2,186 @@
 
 Evidence-first, task-isolated review of Codimango T-Bench, SWE-Bench, multi-turn, Long Horizon, and iOS tasks.
 
-The skill requires the canonical task reviewer, runs trial/spec analysis separately, verifies findings against the exact task revision, and emits the complete Codimango review form: eight base sections plus the conditional Agentic Full-Task Review agreement whenever that review exists. It fails closed when canonical review execution, task isolation, or form-schema validation cannot be proven.
+The skill wraps canonical task reviewers in an executable protocol: sealed preflight, exact-revision binding, distinct reviewer sessions, complete evidence ledgers, conditional live-form fields, strict final validation, and byte-identical publication.
 
-## Install
+Certified publication in `v0.2.0` requires an Agentcloud session and `agentcloudctl`, because run ownership and final approval are verified against the durable control-plane journal. Standalone process-only use may inspect the protocol but fails closed as `isolation_unverified`; it is not paste-ready.
 
-### Codex
-
-```bash
-git clone https://github.com/kngreen/codimango-review-critic.git \
-  ~/.codex/skills/codimango-review-critic
-```
+## Install a pinned release
 
 ### Claude Code
 
 ```bash
-git clone https://github.com/kngreen/codimango-review-critic.git \
+mkdir -p ~/.claude/skills
+git clone --branch v0.2.0 \
+  https://github.com/kngreen/codimango-review-critic.git \
   ~/.claude/skills/codimango-review-critic
 ```
 
-For another agent, clone the repository into that agent's configured skills directory.
+### Codex
+
+```bash
+mkdir -p ~/.codex/skills
+git clone --branch v0.2.0 \
+  https://github.com/kngreen/codimango-review-critic.git \
+  ~/.codex/skills/codimango-review-critic
+```
+
+Start a fresh agent session for every distinct task, then invoke:
+
+```text
+/codimango-review-critic https://codimango.internalmeta.com/reviews/TASK_ID
+```
 
 ## Prerequisites
 
-- `codimango` CLI authenticated for Nest reads
-- `aai-review-flow`
-- the `team-aai` canonical track reviewers
-- `review-trials-and-spec`
-- for iOS tasks, the `aai-ios` reviewer and native macOS/Xcode harness guidance
+Pinned compatibility lives in [`RELEASE.lock`](RELEASE.lock):
 
-If the canonical orchestrator and defined track fallback are both unavailable, the skill stops instead of approximating a review.
+- authenticated Agentcloud/`agentcloudctl` control plane and Codimango CLI;
+- `aai-review-flow`;
+- the track-specific `team-aai` reviewer and `aai-long-horizon` add-on where applicable;
+- `review-trials-and-spec`;
+- `aai-ios` and native macOS/Xcode infrastructure for iOS tasks.
 
-## Use
+Unknown or unpinned dependencies block the release gate.
 
-Invoke the skill with one task URL or identifier:
+## Protocol overview
 
-```text
-/codimango-review-critic https://codimango.internalmeta.com/reviews/202761?review=ai-assessment
-```
+1. Run bundle preflight before reading task data.
+2. Bootstrap a fresh scratch root and task-only manifest.
+3. Freeze identity metadata without reading review prose.
+4. Run a distinct canonical child and a distinct supplemental child.
+5. Seal the blind pass, then fetch same-task review history.
+6. Resolve Agentic, Validation Override, and iOS conditions.
+7. Produce structured findings, evidence, review data, and command audit.
+8. Render the preferred Markdown and live-form payload.
+9. Finalize through the exact bundled validators.
+10. Publish only critic-approved, hash-identical bytes.
 
-Run every distinct task in a fresh agent session. The skill forbids broad review-queue reads and fetches same-task history directly from Codimango.
-
-The output includes:
-
-- a private evidence report;
-- a canonical execution receipt;
-- a task-scoped command audit;
-- a paste-ready review containing all eight base Codimango form sections plus the conditional Agentic agreement when available.
-
-Nothing is submitted automatically.
+See [`SKILL.md`](SKILL.md) for commands and [`references/looping-prompt.md`](references/looping-prompt.md) for the standalone prompt.
 
 ## Repository layout
 
 ```text
+.github/workflows/contract.yml
+RELEASE.lock
 SKILL.md
+README.md
+docs/
+  closing-report-template.md
+registry/skill.json
 references/
   ios-harness-gate.md
   looping-prompt.md
   output-template.md
+schema/
+  bundle-lock.json
+  command-policy.json
+  conditions.json
+  evidence-ledger.json
+  findings.json
+  live-form-payload.json
+  review-data.json
+  review-format.json
+  run-manifest-v2.json
+  supplemental-output.json
 scripts/
+  adapters/
+    agentcloud.py
+    process.py
+  agentcloud_attestation.py
+  audit_exec.py
+  compact_supplemental.py
+  contract.py
+  contract_test.py
+  emit_run_receipt.py
+  finalize_review.py
+  generate_template.py
   lint_final_review.py
+  materialize_fixtures.py
+  publish_verified.py
+  render_live_payload.py
+  render_review.py
+  resolve_conditions.py
+  reviewctl.py
+  run_review.py
+  selftest.sh
   validate_canonical_execution.py
+  validate_command_audit.py
+  validate_internal_evidence.py
   validate_review_schema.py
+  verify_release.sh
+tests/
+  baseline/d790666/
+  fixtures/
 ```
 
-`SKILL.md` is the entry point. The referenced files and scripts must remain beside it; publishing only `SKILL.md` is incomplete.
+`schema/review-format.json` is the single source of truth for the preferred form. `references/output-template.md` is generated from it. `scripts/contract.py` is the single implementation of validation policy; compatibility commands are thin wrappers.
 
-## Validate before publishing
+## Preflight
+
+Before the first task read:
+
+```bash
+SCRATCH="$(mktemp -d /tmp/codimango-review-XXXXXX)"
+python3 scripts/reviewctl.py preflight \
+  --bundle . \
+  --scratch-root "$SCRATCH" \
+  --receipt "$SCRATCH/preflight.json"
+```
+
+Expected output starts with `PREFLIGHT OK`. A dirty/tampered bundle, missing runtime file, nonempty scratch root, or scratch root inside the bundle fails closed.
+
+## Final validation
+
+The critic calls one finalizer after recording the final files and `finalized` phase:
+
+```bash
+python3 scripts/finalize_review.py \
+  --manifest "$SCRATCH/run-manifest.json" \
+  --conditions "$SCRATCH/conditions.json" \
+  --review "$SCRATCH/final-review.md" \
+  --live-payload "$SCRATCH/live-form-payload.json" \
+  --review-data "$SCRATCH/review-data.json" \
+  --findings "$SCRATCH/findings.json" \
+  --ledger "$SCRATCH/evidence-ledger.json" \
+  --evidence "$SCRATCH/internal-evidence.md" \
+  --command-audit "$SCRATCH/command-audit.jsonl" \
+  --approval "$SCRATCH/approval.json"
+```
+
+Only `FINALIZATION OK` from the attested critic session authorizes publication. The parent must use `publish_verified.py` with `--critic-session-id` and `--run`; the publisher verifies the approval, manifest, and review hashes against the critic's durable `FINALIZATION_RECEIPT` tool-result event. It cannot edit or regenerate child bytes.
+
+## Test and release gates
 
 ```bash
 bash scripts/selftest.sh
 ```
 
-The self-test compiles all Python helpers, validates the eight base sections plus a required conditional Agentic agreement, checks a canonical execution receipt, and proves incomplete or misordered forms are rejected.
+The suite runs 93 directional cases across all eight implementation items, including wrong-track fallback, duplicate sessions, blind/history inversion, conditional omission, native iOS evidence, template drift, exact-700-word rejection, semantic decision contradictions, foreign identifiers, phase-aware read-only violations, and bounded supplemental output.
 
-For an optional Meta Skills SDK structural dry run, use the server-compatible inline file set:
-
-```bash
-FILES_JSON="$(python3 - <<'PY'
-import json
-from pathlib import Path
-root = Path('.')
-paths = [root / 'SKILL.md', *sorted((root / 'references').glob('*.md')), *sorted((root / 'scripts').glob('*.py'))]
-print(json.dumps([{'path': str(path), 'content': path.read_text()} for path in paths]))
-PY
-)"
-meta skills.sdk create --files-json="$FILES_JSON" --visibility='Only Me' --dry-run --output=json
-```
-
-That SDK command validates a portable skill file set. It does not publish this GitHub repository.
-
-A real task review is paste-ready only after all three runtime validators pass:
+After committing, run:
 
 ```bash
-python3 scripts/validate_canonical_execution.py \
-  --receipt /path/to/canonical-execution.json \
-  --task-id TASK_ID \
-  --task-sha FULL_SHA
-
-python3 scripts/lint_final_review.py /path/to/final-review.md
-
-python3 scripts/validate_review_schema.py \
-  --template references/output-template.md \
-  --review /path/to/final-review.md \
-  --agentic-required
+bash scripts/verify_release.sh --mode pre-push --sha "$(git rev-parse HEAD)"
 ```
 
-Pass `--agentic-required` whenever the reviewed SHA exposes an Agentic Full-Task Review; omit it only when the live form does not show that step.
+Expected output includes `RELEASE GATES OK`. CI runs the same gate against the pushed SHA. A receipt timestamped before the commit does not certify it.
 
-## Publish in the Codimango GitHub organization
+## Updating
 
-1. Create an empty private repository named `codimango-review-critic` under the `codimango` organization. Do not initialize it with generated files if you are pushing this directory.
-2. Ensure your GitHub account, SSH key, or token is authorized for Codimango SSO.
-3. From this directory:
+Update only to an intentional release tag:
 
 ```bash
-git init -b main
-git add SKILL.md README.md references scripts .gitignore
-git commit -m "Publish Codimango review critic skill"
-git remote add origin \
-  org-272075201@github.com:codimango/codimango-review-critic.git
-git push -u origin main
+git -C ~/.claude/skills/codimango-review-critic fetch --tags
+git -C ~/.claude/skills/codimango-review-critic checkout v0.2.0
 ```
 
-If `main` is protected, push a branch and open a pull request instead:
+Do not track mutable `main` for review-critical execution.
 
-```bash
-git switch -c publish-skill
-git push -u origin publish-skill
-```
+## Registry metadata
 
-After the initial publish, protect `main` and require pull requests for updates, matching the `codimango/ripen` contribution model.
+[`registry/skill.json`](registry/skill.json) describes the same pinned release for Agentcloud/Metamate registration. GitHub publication and registry publication are separate operations; verify the registry copy against `schema/bundle-lock.json` before enabling it.
 
-If you cannot create or push the repository, add yourself as a contributor through Meta's OSS repository portal, authorize Codimango SSO for your SSH key, and retry.
+## Safety
 
-## Update an installation
-
-```bash
-git -C ~/.codex/skills/codimango-review-critic pull --ff-only
-```
-
-Use the corresponding path for Claude Code or another agent.
-
-## Optional: publish to the Metamate skill registry too
-
-GitHub publication and Metamate skill publication are separate. To create a private registry entry from the same files:
-
-```bash
-meta skills.sdk create --dir=. --visibility='Only Me' --output=json
-```
-
-That command publishes to the skills registry. It does not create or update the GitHub repository. Make it `Public` only when you intentionally want registry-wide visibility.
+The skill is read-only by default. It does not submit feedback, rerun platform validation, modify task repositories, push task code, or contact authors. `audit_exec.py` prevalidates commands, mounts the task repository read-only in a Linux/macOS OS sandbox, disables network for arbitrary interpreters and shells, and records each command. `validate_command_audit.py` also blocks broad queue reads, pre-seal history reads, and mutation commands.

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "alias": "codimango-review-critic",
+  "entrypoint": "SKILL.md",
+  "repository": "https://github.com/kngreen/codimango-review-critic",
+  "release": "v0.2.0",
+  "default_visibility": "Only Me",
+  "requires": [
+    "Agentcloud durable journal and agentcloudctl",
+    "aai-review-flow",
+    "review-trials-and-spec",
+    "track-specific team-aai reviewer",
+    "aai-long-horizon for Long Horizon",
+    "aai-ios for iOS"
+  ]
+}

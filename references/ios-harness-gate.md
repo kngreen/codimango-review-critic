@@ -23,6 +23,21 @@ For an iOS SWE-Bench task, require evidence that:
 
 Use current `aai-ios` and template guidance because supported project shapes and exact commands can change.
 
+## Machine-readable evidence
+
+When `conditions.json.ios.state` is `required`, `evidence-ledger.json.ios` must include all of these fields before finalization:
+
+- `runner`: exactly `aai-ios`;
+- `target`: the real submitted target or scheme;
+- `native_command`: the actual Xcode/XCTest/XCUITest command;
+- `f2p`: untouched-base and gold outcomes;
+- `p2p`: regression-suite outcome;
+- `oracle`: reproducible oracle outcome;
+- `no_solution`: untouched/nop outcome or an explicit `NOT VERIFIED` reason;
+- `surrogate_grading`: boolean, with `true` forcing Request changes.
+
+The run manifest must also contain a distinct completed `ios` child with immutable skill revision and output hash. Missing or unresolved iOS evidence blocks finalization.
+
 ## Blocking anti-pattern: regex-rehosted Swift
 
 Default to a blocking **Request changes** finding when the primary grader:
