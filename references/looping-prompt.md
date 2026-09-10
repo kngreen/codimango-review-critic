@@ -50,7 +50,7 @@ Lean Accept if all prior blocking feedback is verified fixed, no new Critical or
 
 Produce two outputs:
 1. A detailed internal evidence report with exact revision binding, `canonical-execution.json` receipt, canonical reviewer output and reconciliation, trial ledger, finding audit, omitted surfaces, baseline results, prior-finding ledger, all open or unverified items, and complete outputs from both final validators.
-2. A paste-ready reviewer follow-up under 700 words. Before drafting, read the full mounted `references/output-template.md`. Return all eight mandatory sections and every exact field in that template, in order. Do not add an Agentic Full-Task Review section, rename or merge fields, omit fields, or substitute a Decision/Blockers summary. Use `None`, `No finding`, `NOT VERIFIED`, `NO DATA`, or `Not applicable` where needed. If the template is inaccessible, stop with `Canonical review format could not be generated.`
+2. A paste-ready reviewer follow-up under 700 words. Before drafting, read the full mounted `references/output-template.md`. Return all eight base sections and every exact field in that template, in order. When the reviewed SHA has an Agentic Full-Task Review, also include `Agentic Full-Task Review (MM)` after Novelty and before TBR, with `Reviewer Agrees?` and `Notes`. Do not rename or merge fields, omit fields, or substitute a Decision/Blockers summary. Use `None`, `No finding`, `NOT VERIFIED`, `NO DATA`, or `Not applicable` where needed. If the template is inaccessible, stop with `Canonical review format could not be generated.`
 
 Apply a strict language firewall to output 2. Every affirmative statement is independently verified by default, so do not use `CONFIRMED`, `confirmed`, `independently confirmed`, or similar verification narration. State the fact and evidence directly; reserve explicit status language for `NOT VERIFIED`, partial evidence, uncertainty, or disagreement. It must not mention batches, relative ranking among tasks, other tasks, previous or earlier reviews, review rounds, review iterations, first or blind passes, re-reviewing, or reviewer self-history. Ban wording such as "best in the batch", "compared with other tasks", "in the previous review", "on the last iteration", "from my earlier miss", "I missed", "we missed", and equivalents. Do not explain how a conclusion was discovered. Translate a fixed historical blocker into a current positive fact or omit it; state an unresolved blocker directly with current evidence.
 
@@ -62,7 +62,9 @@ Before delivery, scan every proper noun, task or repository identifier, file pat
 
 `python3 scripts/lint_final_review.py FINAL.md`
 
-`python3 scripts/validate_review_schema.py --template references/output-template.md --review FINAL.md`
+`python3 scripts/validate_review_schema.py --template references/output-template.md --review FINAL.md [--agentic-required]`
+
+Pass `--agentic-required` whenever the reviewed SHA exposes an Agentic Full-Task Review.
 
 Do not claim paste-ready unless all three exit 0. Include all validator outputs and the detected canonical section/field list in the private evidence report.
 

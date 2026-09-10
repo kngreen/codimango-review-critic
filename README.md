@@ -2,7 +2,7 @@
 
 Evidence-first, task-isolated review of Codimango T-Bench, SWE-Bench, multi-turn, Long Horizon, and iOS tasks.
 
-The skill requires the canonical task reviewer, runs trial/spec analysis separately, verifies findings against the exact task revision, and emits the complete eight-section Codimango review form. It fails closed when canonical review execution, task isolation, or form-schema validation cannot be proven.
+The skill requires the canonical task reviewer, runs trial/spec analysis separately, verifies findings against the exact task revision, and emits the complete Codimango review form: eight base sections plus the conditional Agentic Full-Task Review agreement whenever that review exists. It fails closed when canonical review execution, task isolation, or form-schema validation cannot be proven.
 
 ## Install
 
@@ -47,7 +47,7 @@ The output includes:
 - a private evidence report;
 - a canonical execution receipt;
 - a task-scoped command audit;
-- a paste-ready review containing all eight mandatory Codimango form sections.
+- a paste-ready review containing all eight base Codimango form sections plus the conditional Agentic agreement when available.
 
 Nothing is submitted automatically.
 
@@ -73,7 +73,7 @@ scripts/
 bash scripts/selftest.sh
 ```
 
-The self-test compiles all Python helpers, validates a complete eight-section review, checks a canonical execution receipt, and proves an incomplete form is rejected.
+The self-test compiles all Python helpers, validates the eight base sections plus a required conditional Agentic agreement, checks a canonical execution receipt, and proves incomplete or misordered forms are rejected.
 
 For an optional Meta Skills SDK structural dry run, use the server-compatible inline file set:
 
@@ -103,8 +103,11 @@ python3 scripts/lint_final_review.py /path/to/final-review.md
 
 python3 scripts/validate_review_schema.py \
   --template references/output-template.md \
-  --review /path/to/final-review.md
+  --review /path/to/final-review.md \
+  --agentic-required
 ```
+
+Pass `--agentic-required` whenever the reviewed SHA exposes an Agentic Full-Task Review; omit it only when the live form does not show that step.
 
 ## Publish in the Codimango GitHub organization
 

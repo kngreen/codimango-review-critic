@@ -205,7 +205,7 @@ This report may exceed 700 words.
 
 Before drafting, read the full contents of `references/output-template.md`. The child must receive that file in its mounted skill bundle. If it is inaccessible, stop with `Canonical review format could not be generated.`
 
-Render all eight mandatory sections and every exact field from that template, in order. Do not add an Agentic Full-Task Review section, merge fields, rename headings, omit empty fields, or replace the form with a summary. Use `None`, `No finding`, `NOT VERIFIED`, `NO DATA`, or `Not applicable` where appropriate. Keep the completed canonical form under 700 words.
+Render all eight base sections and every exact field from that template, in order. When the reviewed SHA has an Agentic Full-Task Review, also render the conditional `Agentic Full-Task Review (MM)` section after Novelty and before TBR. Do not merge fields, rename headings, omit empty fields, or replace the form with a summary. Use `None`, `No finding`, `NOT VERIFIED`, `NO DATA`, or `Not applicable` where appropriate. Keep the completed canonical form under 700 words.
 
 Apply an author-facing language firewall before delivery:
 
@@ -226,10 +226,11 @@ python3 scripts/validate_canonical_execution.py \
 python3 scripts/lint_final_review.py FINAL.md
 python3 scripts/validate_review_schema.py \
   --template references/output-template.md \
-  --review FINAL.md
+  --review FINAL.md \
+  [--agentic-required]
 ```
 
-Also pass every known non-current task or repository identifier to the language linter as `--forbid-token TOKEN`. Any canonical-execution, language-lint, or schema finding blocks delivery. Do not claim `paste-ready` unless all three validators exit 0.
+Pass `--agentic-required` whenever the reviewed SHA exposes an Agentic Full-Task Review. Also pass every known non-current task or repository identifier to the language linter as `--forbid-token TOKEN`. Any canonical-execution, language-lint, or schema finding blocks delivery. Do not claim `paste-ready` unless all three validators exit 0.
 
 Compression order:
 

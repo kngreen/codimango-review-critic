@@ -24,6 +24,10 @@ cat >"$TMP/good.md" <<'EOF'
 - **Reviewer Agrees?:** Partially
 - **Notes:** NOT VERIFIED: no public-source result.
 
+### Agentic Full-Task Review (MM)
+- **Reviewer Agrees?:** Partially
+- **Notes:** The review captures the functional core but misses one grading-fairness issue.
+
 ### TBR Review Agreement
 - **Reviewer Agrees?:** Agree
 - **Disagreed Checks:** none
@@ -97,7 +101,25 @@ python3 "$ROOT/scripts/validate_canonical_execution.py" \
 python3 "$ROOT/scripts/lint_final_review.py" "$TMP/good.md"
 python3 "$ROOT/scripts/validate_review_schema.py" \
   --template "$ROOT/references/output-template.md" \
-  --review "$TMP/good.md"
+  --review "$TMP/good.md" \
+  --agentic-required
+
+python3 - "$TMP/good.md" "$TMP/no-agentic.md" <<'PY'
+from pathlib import Path
+import sys
+src = Path(sys.argv[1]).read_text()
+start = src.index("### Agentic Full-Task Review (MM)")
+end = src.index("### TBR Review Agreement")
+Path(sys.argv[2]).write_text(src[:start] + src[end:])
+PY
+
+if python3 "$ROOT/scripts/validate_review_schema.py" \
+  --template "$ROOT/references/output-template.md" \
+  --review "$TMP/no-agentic.md" \
+  --agentic-required >/dev/null 2>&1; then
+  echo "schema validator accepted a missing required Agentic agreement" >&2
+  exit 1
+fi
 
 if python3 "$ROOT/scripts/validate_review_schema.py" \
   --template "$ROOT/references/output-template.md" \
