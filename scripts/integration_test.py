@@ -840,6 +840,19 @@ def main() -> int:
                 cwd=bundle,
             )
             audit = scratch / "audit.jsonl"
+            sandbox_supported = True
+            if sys.platform.startswith("linux"):
+                unshare = shutil.which("unshare")
+                sandbox_supported = bool(
+                    unshare
+                    and subprocess.run(
+                        [unshare, "-Ur", "true"],
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    ).returncode
+                    == 0
+                )
             invoke(
                 [
                     PYTHON,
@@ -854,8 +867,9 @@ def main() -> int:
                     "python3",
                     "--version",
                 ],
-                "Python",
+                "Python" if sandbox_supported else "Linux user namespace unavailable",
                 cwd=bundle,
+                expect=0 if sandbox_supported else 2,
             )
             fake_python = scratch / "python3"
             fake_python.write_text("#!/bin/sh\nexit 0\n")
@@ -926,9 +940,13 @@ def main() -> int:
                     "-c",
                     f"from pathlib import Path; Path({str(protected)!r}).write_text('changed')",
                 ],
-                ("Read-only file system", "Operation not permitted"),
+                (
+                    ("Read-only file system", "Operation not permitted")
+                    if sandbox_supported
+                    else "Linux user namespace unavailable"
+                ),
                 cwd=bundle,
-                expect=1,
+                expect=1 if sandbox_supported else 2,
             )
             if protected.read_text() != "original\n":
                 raise AssertionError("task repository was modified through audit_exec")
@@ -952,9 +970,13 @@ def main() -> int:
                     "-c",
                     f"from pathlib import Path; Path({shm_probe!r}).write_text('changed')",
                 ],
-                ("Read-only file system", "Operation not permitted"),
+                (
+                    ("Read-only file system", "Operation not permitted")
+                    if sandbox_supported
+                    else "Linux user namespace unavailable"
+                ),
                 cwd=bundle,
-                expect=1,
+                expect=1 if sandbox_supported else 2,
             )
             if Path(shm_probe).exists():
                 raise AssertionError("sandbox wrote outside scratch")

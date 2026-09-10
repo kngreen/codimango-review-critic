@@ -47,6 +47,14 @@ def linux_sandbox(
 ) -> list[str]:
     if shutil.which("unshare") is None:
         raise ContractError("READ-ONLY REJECTED: Linux mount namespace unavailable")
+    probe = subprocess.run(
+        ["unshare", "-Ur", "true"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        raise ContractError("READ-ONLY REJECTED: Linux user namespace unavailable")
     offline = Path(command[0]).name in OFFLINE_BINARIES
     script = r"""
 set -eu
