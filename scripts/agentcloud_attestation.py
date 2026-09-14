@@ -29,7 +29,7 @@ ROLE_SKILLS = {
     "canonical_primary": "aai-review-flow",
     "supplemental": "review-trials-and-spec",
     "ios": "aai-ios",
-    "lh_addon": "aai-long-horizon",
+    "lh_addon": "aai-long-horizon:lh-review-task",
 }
 
 
@@ -48,7 +48,12 @@ def successful_skill_load(session_id: str, run: int, skill: str) -> bool:
                 raw = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-        if isinstance(raw, dict) and raw.get("name") == skill:
+        requested = None
+        if isinstance(raw, dict):
+            requested = raw.get("name") or raw.get("skill")
+        if isinstance(requested, str) and (
+            requested == skill or requested.endswith(":" + skill)
+        ):
             intents.add(int(frame.get("seq", -1)))
     return any(
         frame.get("ctx", {}).get("run") == run
@@ -301,15 +306,17 @@ def attested_run_record(
     if expected_runner is not None and receipt["runner"] != expected_runner:
         raise ContractError("journal receipt runner is not canonical for its role")
     expected_skill = ROLE_SKILLS.get(receipt["role"])
-    if expected_skill is not None and not successful_skill_load(
-        session_id, attested_run, expected_skill
+    semantic_status = receipt["status"]
+    if semantic_status not in {"completed", "failed", "unavailable"}:
+        raise ContractError("journal receipt has invalid semantic status")
+    if (
+        semantic_status == "completed"
+        and expected_skill is not None
+        and not successful_skill_load(session_id, attested_run, expected_skill)
     ):
         raise ContractError(
             f"Agentcloud journal lacks successful {expected_skill} skill load"
         )
-    semantic_status = receipt["status"]
-    if semantic_status not in {"completed", "failed", "unavailable"}:
-        raise ContractError("journal receipt has invalid semantic status")
     if status == "finalizing":
         if receipt["role"] != "critic" or semantic_status != "completed":
             raise ContractError(
@@ -336,7 +343,9 @@ def attested_run_record(
         "parent_session_id": parent,
         "workspace": workspace,
         "harness": harness,
-        "loaded_skill": expected_skill,
+        "loaded_skill": (
+            expected_skill if status in {"completed", "finalizing"} else None
+        ),
         "status": status,
         "skill_revision": receipt["skill_revision"],
         "task_id": receipt["task_id"],

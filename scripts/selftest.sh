@@ -48,4 +48,4 @@ print('JSON CONTRACTS OK')
 PY
 
 printf 'ENTRYPOINT CONTROLS OK commands=6\n'
-printf 'SELFTEST OK items=8 cases=94\n'
+printf 'SELFTEST OK items=8 cases=96\n'

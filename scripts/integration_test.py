@@ -220,6 +220,11 @@ def main() -> int:
                 seq += 1
                 if record["loaded_skill"] is not None:
                     skill_intent = seq
+                    skill_input = (
+                        {"skill": "review-trials-and-spec:review-trials-and-spec"}
+                        if record["role"] == "supplemental"
+                        else {"name": record["loaded_skill"], "args": None}
+                    )
                     frames.append(
                         {
                             "frame": "durable",
@@ -228,9 +233,7 @@ def main() -> int:
                             "event": {
                                 "type": "tool_intent",
                                 "tool": "Skill",
-                                "input": json.dumps(
-                                    {"name": record["loaded_skill"], "args": None}
-                                ),
+                                "input": json.dumps(skill_input),
                             },
                             "ctx": {"run": run_id, "session_id": session_id},
                         }
@@ -327,6 +330,17 @@ def main() -> int:
                 "output_path": no_skill_record["output_path"],
                 "output_sha256": no_skill_record["output_sha256"],
             }
+            unavailable_supplemental_receipt = {
+                "session_id": "unavailable-supplemental-session",
+                "role": "supplemental",
+                "runner": "review-trials-and-spec",
+                "status": "unavailable",
+                "task_id": TASK_ID,
+                "task_sha": TASK_SHA,
+                "skill_revision": fixture.manifest["runs"][2]["skill_revision"],
+                "output_path": None,
+                "output_sha256": None,
+            }
             rows.extend(
                 [
                     {
@@ -349,6 +363,14 @@ def main() -> int:
                         "session_id": "no-skill-session",
                         "parent": "critic-session",
                         "workspace": str(temp / "no-skill-workspace"),
+                        "harness": "native",
+                        "running": False,
+                        "last_outcome": {"outcome": "completed"},
+                    },
+                    {
+                        "session_id": "unavailable-supplemental-session",
+                        "parent": "critic-session",
+                        "workspace": str(temp / "unavailable-supplemental-workspace"),
                         "harness": "native",
                         "running": False,
                         "last_outcome": {"outcome": "completed"},
@@ -453,6 +475,71 @@ def main() -> int:
                         "created_at_unix_ms": 1767225605000,
                         "event": {"type": "run_finished", "outcome": "completed"},
                         "ctx": {"run": 47, "session_id": "no-skill-session"},
+                    },
+                ]
+            )
+            unavailable_intent = seq + 20
+            frames.extend(
+                [
+                    {
+                        "frame": "durable",
+                        "seq": unavailable_intent - 1,
+                        "created_at_unix_ms": 1767225604000,
+                        "event": {"type": "run_started"},
+                        "ctx": {
+                            "run": 48,
+                            "session_id": "unavailable-supplemental-session",
+                        },
+                    },
+                    {
+                        "frame": "durable",
+                        "seq": unavailable_intent,
+                        "created_at_unix_ms": 1767225604250,
+                        "event": {
+                            "type": "tool_intent",
+                            "tool": "bash",
+                            "input": json.dumps(
+                                {
+                                    "command": "python3 scripts/emit_run_receipt.py --role supplemental --status unavailable"
+                                }
+                            ),
+                        },
+                        "ctx": {
+                            "run": 48,
+                            "session_id": "unavailable-supplemental-session",
+                        },
+                    },
+                    {
+                        "frame": "durable",
+                        "seq": unavailable_intent + 1,
+                        "created_at_unix_ms": 1767225604500,
+                        "event": {
+                            "type": "tool_result",
+                            "intent": unavailable_intent,
+                            "outcome": {
+                                "outcome": "success",
+                                "content": {
+                                    "text": "CODIMANGO_RUN_RECEIPT="
+                                    + json.dumps(
+                                        unavailable_supplemental_receipt, sort_keys=True
+                                    )
+                                },
+                            },
+                        },
+                        "ctx": {
+                            "run": 48,
+                            "session_id": "unavailable-supplemental-session",
+                        },
+                    },
+                    {
+                        "frame": "durable",
+                        "seq": unavailable_intent + 2,
+                        "created_at_unix_ms": 1767225605000,
+                        "event": {"type": "run_finished", "outcome": "completed"},
+                        "ctx": {
+                            "run": 48,
+                            "session_id": "unavailable-supplemental-session",
+                        },
                     },
                 ]
             )
@@ -694,6 +781,32 @@ def main() -> int:
                 expect=2,
                 env=publish_env,
             )
+            unavailable_record = temp / "unavailable-supplemental-run.json"
+            invoke(
+                [
+                    PYTHON,
+                    "scripts/agentcloud_adapter.py",
+                    "--session-id",
+                    "unavailable-supplemental-session",
+                    "--run",
+                    "48",
+                    "--expected-role",
+                    "supplemental",
+                    "--output",
+                    str(unavailable_record),
+                ],
+                "AGENTCLOUD RUN RECORD OK",
+                env=publish_env,
+            )
+            unavailable_data = json.loads(unavailable_record.read_text())
+            if (
+                unavailable_data["status"] != "unavailable"
+                or unavailable_data["loaded_skill"] is not None
+                or unavailable_data["output_path"] is not None
+            ):
+                raise AssertionError(
+                    "unavailable supplemental attempt was not safely attested"
+                )
             published = temp / "published.md"
             invoke(
                 [
@@ -1007,7 +1120,7 @@ def main() -> int:
                     )
 
             print(
-                "INTEGRATION OK commands=24 final_sha256="
+                "INTEGRATION OK commands=25 final_sha256="
                 + sha256_file(fixture.review_path)
                 + " published_sha256="
                 + sha256_file(published)

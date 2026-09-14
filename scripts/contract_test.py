@@ -326,8 +326,10 @@ class Fixture:
         write_json(supplemental_descriptor, descriptor)
         self.outputs["supplemental"] = supplemental_descriptor
         self.ledger["supplemental"] = {
+            "status": "completed",
             "descriptor_path": str(supplemental_descriptor.resolve()),
             "descriptor_sha256": sha256_file(supplemental_descriptor),
+            "reason": None,
         }
         write_json(self.ledger_path, self.ledger)
         self.manifest = self.make_manifest()
@@ -677,6 +679,21 @@ def failed_primary(record: dict[str, Any]) -> dict[str, Any]:
 def item_i2(temp: Path) -> int:
     f = Fixture(temp / "fixture")
     validate_dag(f.manifest)
+    unavailable_supplemental = copy.deepcopy(f.manifest)
+    unavailable_run = next(
+        run for run in unavailable_supplemental["runs"] if run["role"] == "supplemental"
+    )
+    unavailable_run.update(
+        {
+            "status": "unavailable",
+            "loaded_skill": None,
+            "output_path": None,
+            "output_sha256": None,
+            "output_task_id": None,
+            "output_task_sha": None,
+        }
+    )
+    validate_dag(unavailable_supplemental)
     duplicate_session = copy.deepcopy(f.manifest)
     duplicate_session["runs"][2]["session_id"] = duplicate_session["runs"][1][
         "session_id"
@@ -728,7 +745,7 @@ def item_i2(temp: Path) -> int:
     bad_sha["task"]["validation_sha"] = "short"
     expect_failure(lambda: validate_dag(bad_sha), "does not match")
     print(f"DIRECTION I2 STRICTER old={old} new=2")
-    return 10
+    return 11
 
 
 def item_i3(temp: Path) -> int:
@@ -927,6 +944,33 @@ def item_i5(temp: Path) -> int:
     f = Fixture(temp / "fixture")
     cases = 1
     validate_evidence(f.ledger, f.findings, f.manifest)
+    unavailable_manifest = copy.deepcopy(f.manifest)
+    unavailable_run = next(
+        run for run in unavailable_manifest["runs"] if run["role"] == "supplemental"
+    )
+    unavailable_run.update(
+        {
+            "status": "unavailable",
+            "loaded_skill": None,
+            "output_path": None,
+            "output_sha256": None,
+            "output_task_id": None,
+            "output_task_sha": None,
+        }
+    )
+    unavailable_reason = (
+        "review-trials-and-spec was attempted but unavailable in the active catalog."
+    )
+    unavailable_ledger = copy.deepcopy(f.ledger)
+    unavailable_ledger["supplemental"] = {
+        "status": "unavailable",
+        "descriptor_path": None,
+        "descriptor_sha256": None,
+        "reason": unavailable_reason,
+    }
+    unavailable_ledger["unresolved"].append(unavailable_reason)
+    validate_evidence(unavailable_ledger, f.findings, unavailable_manifest)
+    cases += 1
     missing_baseline = copy.deepcopy(f.ledger)
     del missing_baseline["baselines"]["shortcut"]
     expect_failure(
@@ -1151,8 +1195,10 @@ def item_i5(temp: Path) -> int:
         },
     )
     supplemental["supplemental"] = {
+        "status": "completed",
         "descriptor_path": str(invalid_descriptor_path),
         "descriptor_sha256": sha256_file(invalid_descriptor_path),
+        "reason": None,
     }
     supplemental_manifest = copy.deepcopy(f.manifest)
     supplemental_run = next(
@@ -1717,7 +1763,7 @@ ITEMS: dict[str, Callable[[Path], int]] = {
     "I7": item_i7,
     "I8": item_i8,
 }
-EXPECTED = {"I1": 6, "I2": 10, "I3": 5, "I4": 12, "I5": 19, "I6": 23, "I7": 11, "I8": 8}
+EXPECTED = {"I1": 6, "I2": 11, "I3": 5, "I4": 12, "I5": 20, "I6": 23, "I7": 11, "I8": 8}
 
 
 def main() -> int:

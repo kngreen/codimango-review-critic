@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release": "0.2.3",
+  "release": "0.2.4",
   "critic_baseline": "d79066618fb26f50c162d41199c8847ddf481372",
   "dependencies": {
     "aai-review-flow": "77e3a1c8cc16c5ec6cfc750d131c9063c1189e66",

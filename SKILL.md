@@ -28,8 +28,10 @@ The dispatcher enumerates assignments but never reviews a task itself.
    hand-transcribe or infer an ID.
 4. Before dispatching reviews, start one fresh **CANARY ONLY** session for the
    first selected task. Pass only its numeric ID, this skill, and the canary
-   instruction below. Wait for `CANARY READY`. If it does not arrive, stop;
-   do not fan out a shared packaging, authentication, or sandbox failure.
+   instruction below. The canary also loads the plugin-only supplemental and
+   iOS skills in a short `claude_code` child without reading task data. Wait for
+   `CANARY READY`. If it does not arrive, stop; do not fan out a shared
+   packaging, authentication, sandbox, or plugin-routing failure.
 5. After the canary passes, start one fresh root session per task, passing only
    that task's numeric ID and this skill. Never pass a queue row or sibling
    identifier into a reviewer.
@@ -43,9 +45,12 @@ The canary prompt is:
 ```text
 CANARY ONLY for task TASK_ID. Attach the authenticated Codimango devserver.
 Run sealed preflight and bootstrap, then use audit_exec.py for exactly one
-`codimango task show TASK_ID --json` read. Return `CANARY READY: TASK_ID` only
-if bundle integrity, registry materialization, authentication, and the OS
-sandbox all pass. Read no review prose and perform no review.
+`codimango task show TASK_ID --json` read. In a separate `claude_code` child on
+the same host, use the Skill tool to load
+`review-trials-and-spec:review-trials-and-spec` and `team-aai:aai-ios` without
+reading task data or running either review. Return `CANARY READY: TASK_ID` only
+if bundle integrity, registry materialization, authentication, the OS sandbox,
+and both plugin loads pass. Read no review prose and perform no review.
 ```
 
 A normal reviewer prompt names exactly one numeric task ID, requires the
@@ -56,9 +61,12 @@ The task link shown to the user is
 ### `CANARY ONLY` with one task identifier
 
 Run Phase 0 and bootstrap in an empty scratch root, then run exactly one audited
-`codimango task show TASK_ID --json`. Read no comments, reviews, trials, or
-repository content. Return `CANARY READY: TASK_ID` only after that command exits
-successfully; otherwise return the exact failing gate.
+`codimango task show TASK_ID --json`. In a distinct `claude_code` child on the
+authenticated host, load `review-trials-and-spec:review-trials-and-spec` and
+`team-aai:aai-ios` with the Skill tool, but run neither workflow. Read no
+comments, reviews, trials, or repository content. Return `CANARY READY: TASK_ID`
+only after the task read and both plugin loads exit successfully; otherwise
+return the exact failing gate.
 
 ### One task identifier: reviewer
 
@@ -162,9 +170,9 @@ Begin the blind phase before spawning any reviewer:
 python3 scripts/run_review.py phase --manifest "$SCRATCH/run-manifest.json" --name blind_started
 ```
 
-Create the critic session as a child of the dispatcher. Then create a distinct canonical child of the critic:
+Create the critic session as a child of the dispatcher. Then create a distinct canonical child of the critic.
 
-Each canonical/supplemental/add-on child must load its named pinned skill through the platform skill loader before doing work; the adapter verifies the successful Skill intent/result in that child's durable journal.
+The primary `aai-review-flow` runner is a Skills SDK skill and may use a native child. The track fallbacks and add-ons are Agent Marketplace plugins; run those in distinct `claude_code` children pinned to the authenticated devserver and invoke their Skill tool names. The durable journal may record either a bare alias or a plugin-qualified alias, and the adapter verifies both forms.
 
 1. Primary: `aai-review-flow` with its full file set and immutable revision.
 2. Only if primary fails before a nonempty handoff, run the exact track fallback:
@@ -177,7 +185,7 @@ Each canonical/supplemental/add-on child must load its named pinned skill throug
 | SWE-Bench multi-turn | `team-aai:review-task-swebench-multiturn` |
 | Long Horizon | matching v2 fallback **and** `aai-long-horizon:lh-review-task` |
 
-Run `review-trials-and-spec` in another distinct child for every task. For iOS, also run `aai-ios` in a distinct child and apply `references/ios-harness-gate.md`.
+Run `review-trials-and-spec:review-trials-and-spec` in another distinct `claude_code` child for every task. For iOS, also run `team-aai:aai-ios` with the `review` argument in a distinct `claude_code` child and apply `references/ios-harness-gate.md`. For Long Horizon, invoke `aai-long-horizon:lh-review-task` the same way. A missing Skills SDK alias is not evidence that these plugin skills are unavailable.
 
 Record each child from its durable Agentcloud journal. In the child, emit a receipt as the final tool command after its output is complete:
 
@@ -202,6 +210,8 @@ python3 scripts/run_review.py record-run \
 ```
 
 Repeat this for supplemental and required add-ons. If a reviewer returns a controlled failure before a handoff, emit the same receipt with `--status failed` and no `--output-path`; if the Agentcloud run itself fails, the adapter derives failure from that exact run's terminal event. `scripts/process_adapter.py` deliberately rejects; it cannot prove session isolation.
+
+If the supplemental runner remains unavailable after both its native alias and installed Claude Code plugin are attempted, emit an `unavailable` supplemental receipt, put the exact reason in `evidence-ledger.json.unresolved`, and set `evidence-ledger.json.supplemental` to the matching unavailable state with no descriptor. Continue without universal trial/spec claims and lower confidence. This exception applies only to the supplemental lane. A required iOS or Long Horizon add-on remains blocking when unavailable.
 
 Seal the blind pass only after every blind reviewer and required add-on has finished:
 

@@ -643,12 +643,10 @@ def validate_dag(manifest: Mapping[str, Any]) -> dict[str, Any]:
                 "RUN DAG REJECTED: Long Horizon requires matching reviewer plus lh-review-task"
             )
     supplemental = by_role.get("supplemental")
-    if (
-        supplemental is None
-        or supplemental["runner"] != "review-trials-and-spec"
-        or supplemental["status"] != "completed"
-    ):
-        raise ContractError("RUN DAG REJECTED: separate supplemental did not complete")
+    if supplemental is None or supplemental["runner"] != "review-trials-and-spec":
+        raise ContractError("RUN DAG REJECTED: separate supplemental was not attempted")
+    if supplemental["status"] not in {"completed", "failed", "unavailable"}:
+        raise ContractError("RUN DAG REJECTED: supplemental status is invalid")
     conditions_entry = manifest.get("conditions")
     if (
         not isinstance(conditions_entry, dict)
@@ -1394,28 +1392,51 @@ def validate_evidence(
     )
     supplemental_ref = ledger.get("supplemental")
     if not isinstance(supplemental_ref, dict):
-        raise ContractError("EVIDENCE REJECTED: supplemental descriptor missing")
-    descriptor_path = Path(str(supplemental_ref.get("descriptor_path", "")))
-    require_file(descriptor_path, supplemental_ref.get("descriptor_sha256"))
-    descriptor = load_json(descriptor_path)
-    supplemental_finding_ids = validate_supplemental(
-        descriptor,
-        str(manifest["task"]["id"]),
-        manifest["task"]["validation_sha"],
-    )
+        raise ContractError("EVIDENCE REJECTED: supplemental evidence missing")
     supplemental_run = next(
         (run for run in manifest.get("runs", []) if run.get("role") == "supplemental"),
         None,
     )
+    supplemental_status = supplemental_ref.get("status")
     if (
         supplemental_run is None
-        or supplemental_run.get("output_path") != str(descriptor_path)
-        or supplemental_run.get("output_sha256")
-        != supplemental_ref.get("descriptor_sha256")
+        or supplemental_run.get("status") != supplemental_status
     ):
-        raise ContractError(
-            "EVIDENCE REJECTED: supplemental descriptor is not linked to supplemental run output"
+        raise ContractError("EVIDENCE REJECTED: supplemental status disagrees with run")
+    if supplemental_status == "completed":
+        descriptor_path = Path(str(supplemental_ref.get("descriptor_path", "")))
+        require_file(descriptor_path, supplemental_ref.get("descriptor_sha256"))
+        descriptor = load_json(descriptor_path)
+        supplemental_finding_ids = validate_supplemental(
+            descriptor,
+            str(manifest["task"]["id"]),
+            manifest["task"]["validation_sha"],
         )
+        if supplemental_run.get("output_path") != str(
+            descriptor_path
+        ) or supplemental_run.get("output_sha256") != supplemental_ref.get(
+            "descriptor_sha256"
+        ):
+            raise ContractError(
+                "EVIDENCE REJECTED: supplemental descriptor is not linked to supplemental run output"
+            )
+    elif supplemental_status in {"failed", "unavailable"}:
+        reason = supplemental_ref.get("reason")
+        if (
+            supplemental_ref.get("descriptor_path") is not None
+            or supplemental_ref.get("descriptor_sha256") is not None
+            or supplemental_run.get("output_path") is not None
+            or supplemental_run.get("output_sha256") is not None
+            or not isinstance(reason, str)
+            or len(reason.strip()) < 15
+            or reason not in ledger["unresolved"]
+        ):
+            raise ContractError(
+                "EVIDENCE REJECTED: unavailable supplemental evidence is incomplete"
+            )
+        supplemental_finding_ids = set()
+    else:
+        raise ContractError("EVIDENCE REJECTED: supplemental status is invalid")
     final_finding_ids = {str(item["id"]) for item in findings["findings"]}
     current_review_finding_ids = {
         str(finding_id)

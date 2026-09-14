@@ -102,10 +102,12 @@
     "ios": {"type": ["object", "null"]},
     "supplemental": {
       "type": "object",
-      "required": ["descriptor_path", "descriptor_sha256"],
+      "required": ["status", "descriptor_path", "descriptor_sha256", "reason"],
       "properties": {
-        "descriptor_path": {"type": "string", "minLength": 1},
-        "descriptor_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "status": {"enum": ["completed", "failed", "unavailable"]},
+        "descriptor_path": {"type": ["string", "null"]},
+        "descriptor_sha256": {"type": ["string", "null"]},
+        "reason": {"type": ["string", "null"]}
       },
       "additionalProperties": false
     }
