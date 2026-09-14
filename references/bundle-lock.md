@@ -2,7 +2,7 @@
   "generated_by": "python3 scripts/reviewctl.py seal-bundle --bundle . --write",
   "note": "This file intentionally does not hash itself.",
   "runtime_files": {
-    "SKILL.md": "180e73261d241faa1a054808ba3592a0b1afa501f68bfd085457389193220a66",
+    "SKILL.md": "baf4b771a0488aad38a976a7e30162cb00c30728c140f9c42785890664c031b3",
     "references/command-policy.md": "0f8f8db95e3c61b457f589ac03495958edbcff0129871696f638b46c810b49cd",
     "references/ios-harness-gate.md": "6be72e11ed7015e4a099495b4efc6f507ebffcf5da6604f31e75d5f39e048610",
     "references/looping-prompt.md": "2240db78b906f3b6f8163b86481062fd38be165247e714c8dba061ac088e2c12",

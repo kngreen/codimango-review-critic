@@ -29,11 +29,12 @@ The dispatcher enumerates assignments but never reviews a task itself.
 4. Before dispatching reviews, start one fresh **CANARY ONLY** session for the
    first selected task. Pass only its numeric ID, this skill, and the canary
    instruction below. The canary also checks the plugin-only supplemental and
-   iOS lanes in short `claude_code` children without reading task data. The iOS
-   child must use the message-initial slash command because that skill disables
-   model invocation. Wait for `CANARY READY`. If it does not arrive, stop; do
-   not fan out a shared packaging, authentication, sandbox, or plugin-routing
-   failure.
+   iOS lanes in short `claude_code` children explicitly pinned by `node_id` to
+   the attached authenticated devserver; never let those children choose a
+   fresh host. The iOS child must use the message-initial slash command because
+   that skill disables model invocation. Wait for `CANARY READY`. If it does
+   not arrive, stop; do not fan out a shared packaging, authentication,
+   sandbox, or plugin-routing failure.
 5. After the canary passes, start one fresh root session per task, passing only
    that task's numeric ID and this skill. Never pass a queue row or sibling
    identifier into a reviewer.
@@ -48,12 +49,13 @@ The canary prompt is:
 CANARY ONLY for task TASK_ID. Attach the authenticated Codimango devserver.
 Run sealed preflight and bootstrap, then use audit_exec.py for exactly one
 `codimango task show TASK_ID --json` read. In one separate `claude_code` child
-on the same host, use the Skill tool to load
-`review-trials-and-spec:review-trials-and-spec`. In a second `claude_code`
-child, send the message-initial slash command `/team-aai:aai-ios help`; do not
-run a review. Return `CANARY READY: TASK_ID` only if bundle integrity, registry
-materialization, authentication, the OS sandbox, and both plugin checks pass.
-Read no review prose and perform no review.
+explicitly pinned by `node_id` to that attached devserver, use the Skill tool to
+load `review-trials-and-spec:review-trials-and-spec`. In a second
+`claude_code` child pinned to the same node, send the message-initial slash
+command `/team-aai:aai-ios help`; do not run a review. Never provision or choose
+a fresh child host for either plugin check. Return `CANARY READY: TASK_ID` only
+if bundle integrity, registry materialization, authentication, the OS sandbox,
+and both plugin checks pass. Read no review prose and perform no review.
 ```
 
 A normal reviewer prompt names exactly one numeric task ID, requires the
@@ -64,13 +66,15 @@ The task link shown to the user is
 ### `CANARY ONLY` with one task identifier
 
 Run Phase 0 and bootstrap in an empty scratch root, then run exactly one audited
-`codimango task show TASK_ID --json`. In one distinct `claude_code` child on
-the authenticated host, load `review-trials-and-spec:review-trials-and-spec`
-with the Skill tool but do not run it. In a second `claude_code` child, send the
+`codimango task show TASK_ID --json`. In one distinct `claude_code` child
+explicitly pinned by `node_id` to the authenticated devserver, load
+`review-trials-and-spec:review-trials-and-spec` with the Skill tool but do not
+run it. In a second `claude_code` child pinned to the same node, send the
 message-initial slash command `/team-aai:aai-ios help`; the skill intentionally
-disables model invocation. Read no comments, reviews, trials, or repository
-content. Return `CANARY READY: TASK_ID` only after the task read and both plugin
-checks exit successfully; otherwise return the exact failing gate.
+disables model invocation. Never use a fresh child host for either check. Read
+no comments, reviews, trials, or repository content. Return `CANARY READY: TASK_ID`
+only after the task read and both plugin checks exit successfully; otherwise
+return the exact failing gate.
 
 ### One task identifier: reviewer
 
@@ -176,7 +180,7 @@ python3 scripts/run_review.py phase --manifest "$SCRATCH/run-manifest.json" --na
 
 Create the critic session as a child of the dispatcher. Then create a distinct canonical child of the critic.
 
-The primary `aai-review-flow` runner is a Skills SDK skill and may use a native child. The track fallbacks and add-ons are Agent Marketplace plugins; run those in distinct `claude_code` children pinned to the authenticated devserver and invoke their Skill tool names. The durable journal may record either a bare alias or a plugin-qualified alias, and the adapter verifies both forms.
+The primary `aai-review-flow` runner is a Skills SDK skill and may use a native child. The track fallbacks and add-ons are Agent Marketplace plugins; run those in distinct `claude_code` children explicitly pinned by `node_id` to the already attached authenticated devserver. Never let a plugin child provision or select a fresh host. Invoke their Skill tool names there. The durable journal may record either a bare alias or a plugin-qualified alias, and the adapter verifies both forms.
 
 1. Primary: `aai-review-flow` with its full file set and immutable revision.
 2. Only if primary fails before a nonempty handoff, run the exact track fallback:
