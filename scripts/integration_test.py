@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from agentcloud_attestation import successful_skill_load
 from audit_exec import probe_sandbox
 from contract import ContractError, sha256_file, write_json
 from contract_test import (
@@ -375,6 +376,14 @@ def main() -> int:
                         "running": False,
                         "last_outcome": {"outcome": "completed"},
                     },
+                    {
+                        "session_id": "slash-skill-session",
+                        "parent": "critic-session",
+                        "workspace": str(temp / "slash-skill-workspace"),
+                        "harness": "claude_code",
+                        "running": False,
+                        "last_outcome": {"outcome": "completed"},
+                    },
                 ]
             )
             frames.extend(
@@ -543,6 +552,35 @@ def main() -> int:
                     },
                 ]
             )
+            slash_input = unavailable_intent + 10
+            frames.extend(
+                [
+                    {
+                        "frame": "durable",
+                        "seq": slash_input,
+                        "created_at_unix_ms": 1767225603900,
+                        "event": {
+                            "type": "user_input",
+                            "text": "/team-aai:aai-ios review task 999001",
+                        },
+                        "ctx": {"session_id": "slash-skill-session"},
+                    },
+                    {
+                        "frame": "durable",
+                        "seq": slash_input + 1,
+                        "created_at_unix_ms": 1767225604000,
+                        "event": {"type": "run_started"},
+                        "ctx": {"run": 49, "session_id": "slash-skill-session"},
+                    },
+                    {
+                        "frame": "durable",
+                        "seq": slash_input + 2,
+                        "created_at_unix_ms": 1767225605000,
+                        "event": {"type": "run_finished", "outcome": "completed"},
+                        "ctx": {"run": 49, "session_id": "slash-skill-session"},
+                    },
+                ]
+            )
             frames.append(
                 {
                     "frame": "durable",
@@ -575,7 +613,7 @@ def main() -> int:
                 "elif len(sys.argv) > 1 and sys.argv[1] == 'history':\n"
                 "    selected = next((sys.argv[i+1] for i,v in enumerate(sys.argv[:-1]) if v == '-s'), None)\n"
                 "    for frame in frames:\n"
-                "        if frame.get('ctx', {}).get('session_id') == selected:\n"
+                "        if (frame.get('ctx') or {}).get('session_id') == selected:\n"
                 "            print(json.dumps(frame))\n"
                 "    if selected == 'critic-session' and attestation_path.is_file():\n"
                 "        receipt = json.loads(attestation_path.read_text())\n"
@@ -587,6 +625,16 @@ def main() -> int:
             fake_agentcloudctl.chmod(0o755)
             publish_env = os.environ.copy()
             publish_env["PATH"] = str(fake_bin) + os.pathsep + publish_env["PATH"]
+            original_path = os.environ.get("PATH")
+            os.environ["PATH"] = publish_env["PATH"]
+            try:
+                if not successful_skill_load("slash-skill-session", 49, "aai-ios"):
+                    raise AssertionError("slash-invoked iOS skill was not attested")
+            finally:
+                if original_path is None:
+                    os.environ.pop("PATH", None)
+                else:
+                    os.environ["PATH"] = original_path
 
             approval = temp / "approval.json"
             final_env = publish_env.copy()

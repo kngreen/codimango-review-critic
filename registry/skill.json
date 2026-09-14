@@ -3,7 +3,7 @@
   "alias": "codimango-review-critic",
   "entrypoint": "SKILL.md",
   "repository": "https://github.com/kngreen/codimango-review-critic",
-  "release": "v0.2.4",
+  "release": "v0.2.5",
   "default_visibility": "Only Me",
   "requires": [
     "Agentcloud durable journal and agentcloudctl",

@@ -55,13 +55,37 @@ def successful_skill_load(session_id: str, run: int, skill: str) -> bool:
             requested == skill or requested.endswith(":" + skill)
         ):
             intents.add(int(frame.get("seq", -1)))
-    return any(
+    if any(
         frame.get("ctx", {}).get("run") == run
         and frame.get("event", {}).get("type") == "tool_result"
         and frame.get("event", {}).get("intent") in intents
         and frame.get("event", {}).get("outcome", {}).get("outcome") == "success"
         for frame in frames
-    )
+    ):
+        return True
+
+    run_starts = [
+        int(frame.get("seq", -1))
+        for frame in frames
+        if frame.get("event", {}).get("type") == "run_started"
+        and frame.get("ctx", {}).get("run") == run
+    ]
+    if len(run_starts) != 1:
+        return False
+    prior_inputs = [
+        frame
+        for frame in frames
+        if frame.get("event", {}).get("type") == "user_input"
+        and int(frame.get("seq", -1)) < run_starts[0]
+    ]
+    if not prior_inputs:
+        return False
+    latest = max(prior_inputs, key=lambda frame: int(frame.get("seq", -1)))
+    text = latest.get("event", {}).get("text")
+    if not isinstance(text, str) or not text.lstrip().startswith("/"):
+        return False
+    command = text.lstrip().split(None, 1)[0][1:]
+    return command == skill or command.endswith(":" + skill)
 
 
 def _run_json(args: list[str]) -> Any:

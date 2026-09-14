@@ -208,6 +208,16 @@ python3 scripts/emit_run_receipt.py \
   --output-path "$SCRATCH_CHILD/canonical-output.md"
 ```
 
+Use these exact receipt identities:
+
+| Lane | `--role` | `--runner` |
+|---|---|---|
+| Primary | `canonical_primary` | `aai-review-flow` |
+| Track fallback | `canonical_fallback` | exact fallback alias from the table above |
+| Supplemental | `supplemental` | `review-trials-and-spec` |
+| iOS | `ios` | `aai-ios` |
+| Long Horizon add-on | `lh_addon` | `aai-long-horizon:lh-review-task` |
+
 Then, from the critic, derive the run record from control-plane metadata rather than caller assertions:
 
 ```bash
