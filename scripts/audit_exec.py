@@ -400,7 +400,7 @@ def main() -> int:
             candidate = Path(handle.name)
         try:
             validate_command_audit(
-                candidate, manifest, ROOT / "schema" / "command-policy.json"
+                candidate, manifest, ROOT / "references" / "command-policy.md"
             )
         finally:
             candidate.unlink(missing_ok=True)

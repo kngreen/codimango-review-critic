@@ -31,7 +31,7 @@ if [[ -n "$(git -C "$ROOT" status --short --untracked-files=no)" ]]; then
   echo "release tree is dirty" >&2
   exit 2
 fi
-python3 -m py_compile "$ROOT"/scripts/*.py "$ROOT"/scripts/adapters/*.py
+python3 -m py_compile "$ROOT"/scripts/*.py
 black --check "$ROOT/scripts"
 git -C "$ROOT" diff --check
 python3 "$ROOT/scripts/generate_template.py" --check
@@ -48,7 +48,7 @@ import sys
 sys.path.insert(0, str(Path(sys.argv[1]) / 'scripts'))
 from contract import validate_release_lock
 root=Path(sys.argv[1])
-lock=validate_release_lock(root/'RELEASE.lock', root/'references'/'output-template.md')
+lock=validate_release_lock(root/'references'/'release-lock.md', root/'references'/'output-template.md')
 print(f"RELEASE LOCK OK version={lock['release']} dependencies={len(lock['dependencies'])}")
 PY
 RECEIPT="${TMPDIR:-/tmp}/codimango-review-critic-release-receipt.json"

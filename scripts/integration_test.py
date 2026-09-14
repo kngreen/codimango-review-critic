@@ -616,7 +616,7 @@ def main() -> int:
             invoke(
                 [
                     PYTHON,
-                    "scripts/adapters/agentcloud.py",
+                    "scripts/agentcloud_adapter.py",
                     "--session-id",
                     "primary-session",
                     "--run",
@@ -639,7 +639,7 @@ def main() -> int:
             invoke(
                 [
                     PYTHON,
-                    "scripts/adapters/agentcloud.py",
+                    "scripts/agentcloud_adapter.py",
                     "--session-id",
                     "failed-session",
                     "--run",
@@ -663,7 +663,7 @@ def main() -> int:
             invoke(
                 [
                     PYTHON,
-                    "scripts/adapters/agentcloud.py",
+                    "scripts/agentcloud_adapter.py",
                     "--session-id",
                     "rogue-session",
                     "--run",
@@ -680,7 +680,7 @@ def main() -> int:
             invoke(
                 [
                     PYTHON,
-                    "scripts/adapters/agentcloud.py",
+                    "scripts/agentcloud_adapter.py",
                     "--session-id",
                     "no-skill-session",
                     "--run",

@@ -64,8 +64,8 @@ def main() -> int:
         "--policy",
         type=Path,
         default=Path(__file__).resolve().parent.parent
-        / "schema"
-        / "command-policy.json",
+        / "references"
+        / "command-policy.md",
     )
 
     args = parser.parse_args()
@@ -73,7 +73,7 @@ def main() -> int:
         if args.command == "seal-bundle":
             value = seal_bundle(args.bundle.resolve())
             if args.write:
-                target = args.bundle / "schema" / "bundle-lock.json"
+                target = args.bundle / "references" / "bundle-lock.md"
                 write_json(target, value)
                 print(
                     f"BUNDLE SEALED files={len(value['runtime_files'])} path={target}"

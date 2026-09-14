@@ -1,6 +1,6 @@
 # Canonical Codimango review form contract
 
-This file is generated from `schema/review-format.json`. Edit the schema, then run:
+This file is generated from `references/schema-review-format.md`. Edit the schema, then run:
 
 `python3 scripts/generate_template.py --write`
 

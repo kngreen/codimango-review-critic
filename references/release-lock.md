@@ -21,7 +21,7 @@
     "conditions": 1
   },
   "artifacts": {
-    "references/output-template.md": "b8fb28e1c0afaaa78f9648131a44b65a7879e5ec96feb48ff98fc0e2aaa67d41",
-    "schema/review-format.json": "7ec810eabb15ae38eea80c5857c09c33dcfa8373f98f609c2d418132865b4066"
+    "output-template.md": "0bc296848e428177d1bf6923544a35aa382be00218780c8b7f41506a2c138f72",
+    "schema-review-format.md": "7ec810eabb15ae38eea80c5857c09c33dcfa8373f98f609c2d418132865b4066"
   }
 }

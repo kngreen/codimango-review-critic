@@ -15,7 +15,7 @@ def main() -> int:
     parser.add_argument("--audit", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument(
-        "--policy", type=Path, default=ROOT / "schema" / "command-policy.json"
+        "--policy", type=Path, default=ROOT / "references" / "command-policy.md"
     )
     args = parser.parse_args()
     try:

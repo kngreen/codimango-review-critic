@@ -246,7 +246,7 @@ def attested_run_record(
     if status in {"failed", "unavailable"}:
         if expected_role not in ROLE_RUNNERS or expected_role == "critic":
             raise ContractError("failed Agentcloud run needs a supported expected role")
-        lock = load_json(ROOT / "RELEASE.lock")
+        lock = load_json(ROOT / "references" / "release-lock.md")
         dependency = ROLE_DEPENDENCIES.get(expected_role)
         if dependency is None:
             raise ContractError(

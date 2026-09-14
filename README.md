@@ -36,7 +36,7 @@ Invoking `/codimango-review-critic` without a task runs the queue dispatcher. It
 
 ## Prerequisites
 
-Pinned compatibility lives in [`RELEASE.lock`](RELEASE.lock):
+Pinned compatibility lives in [`references/release-lock.md`](references/release-lock.md):
 
 - authenticated Agentcloud/`agentcloudctl` control plane and Codimango CLI;
 - `aai-review-flow`;
@@ -64,60 +64,26 @@ See [`SKILL.md`](SKILL.md) for commands and [`references/looping-prompt.md`](ref
 ## Repository layout
 
 ```text
-.github/workflows/contract.yml
-RELEASE.lock
 SKILL.md
-README.md
-docs/
-  closing-report-template.md
-registry/skill.json
 references/
+  bundle-lock.md
+  command-policy.md
   ios-harness-gate.md
   looping-prompt.md
   output-template.md
-schema/
-  bundle-lock.json
-  command-policy.json
-  conditions.json
-  evidence-ledger.json
-  findings.json
-  live-form-payload.json
-  review-data.json
-  review-format.json
-  run-manifest-v2.json
-  supplemental-output.json
+  release-lock.md
+  schema-*.md
 scripts/
-  adapters/
-    agentcloud.py
-    process.py
-  agentcloud_attestation.py
-  audit_exec.py
-  compact_supplemental.py
-  contract.py
-  contract_test.py
-  emit_run_receipt.py
-  finalize_review.py
-  generate_template.py
-  lint_final_review.py
-  materialize_fixtures.py
-  publish_verified.py
-  render_live_payload.py
-  render_review.py
-  resolve_conditions.py
-  reviewctl.py
-  run_review.py
-  selftest.sh
-  validate_canonical_execution.py
-  validate_command_audit.py
-  validate_internal_evidence.py
-  validate_review_schema.py
-  verify_release.sh
-tests/
-  baseline/d790666/
-  fixtures/
+  *.py
 ```
 
-`schema/review-format.json` is the single source of truth for the preferred form. `references/output-template.md` is generated from it. `scripts/contract.py` is the single implementation of validation policy; compatibility commands are thin wrappers.
+That flat runtime layout is deliberate: the Skills SDK represents only
+`SKILL.md`, `scripts/<name>.py`, and `references/<name>.md`. Source-only CI,
+docs, tests, and shell release helpers remain in the Git repository but are not
+part of the registry bundle. `references/schema-review-format.md` is the single
+source of truth for the preferred form, and `references/output-template.md` is
+generated from it. `scripts/contract.py` is the single implementation of
+validation policy.
 
 ## Preflight
 
@@ -182,18 +148,23 @@ Do not track mutable `main` for review-critical execution.
 
 ## Registry metadata
 
-[`registry/skill.json`](registry/skill.json) describes the same pinned release for Agentcloud/Metamate registration. GitHub publication and registry publication are separate operations. Always publish a whole-directory revision, never a hand-selected `SKILL.md`/references subset:
+Build the exact portable file set, then publish that staged directory. Never publish the repository root or a hand-selected subset:
 
 ```bash
+python3 scripts/build_registry_package.py \
+  --bundle=. --output=/tmp/codimango-review-critic-registry
 meta --local skills.sdk revise \
   --alias=codimango-review-critic \
-  --dir=. \
+  --dir=/tmp/codimango-review-critic-registry \
   --base-revision=REVISION_FROM_SKILLS_SDK_LOAD \
   --revision-title='Release v0.2.3' \
   --output=json
 ```
 
-Load the resulting revision with `--content --out-dir`, verify every path in `schema/bundle-lock.json` exists, and run `reviewctl.py preflight` from that materialized copy before enabling the revision.
+Load the resulting revision with `--content --out-dir` and run its bundled
+`reviewctl.py preflight`. The package builder and preflight both compare the
+materialized file set against `references/bundle-lock.md`, so a four-file or
+otherwise truncated registry revision fails before any task read.
 
 ## Safety
 

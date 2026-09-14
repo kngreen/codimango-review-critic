@@ -192,7 +192,7 @@ python3 scripts/emit_run_receipt.py \
 Then, from the critic, derive the run record from control-plane metadata rather than caller assertions:
 
 ```bash
-python3 scripts/adapters/agentcloud.py \
+python3 scripts/agentcloud_adapter.py \
   --session-id "$CANONICAL_SESSION_ID" --run "$CANONICAL_RUN" \
   --expected-role canonical_primary \
   --output "$SCRATCH/canonical-run.json"
@@ -201,7 +201,7 @@ python3 scripts/run_review.py record-run \
   --run-record "$SCRATCH/canonical-run.json"
 ```
 
-Repeat this for supplemental and required add-ons. If a reviewer returns a controlled failure before a handoff, emit the same receipt with `--status failed` and no `--output-path`; if the Agentcloud run itself fails, the adapter derives failure from that exact run's terminal event. `scripts/adapters/process.py` deliberately rejects; it cannot prove session isolation.
+Repeat this for supplemental and required add-ons. If a reviewer returns a controlled failure before a handoff, emit the same receipt with `--status failed` and no `--output-path`; if the Agentcloud run itself fails, the adapter derives failure from that exact run's terminal event. `scripts/process_adapter.py` deliberately rejects; it cannot prove session isolation.
 
 Seal the blind pass only after every blind reviewer and required add-on has finished:
 
@@ -230,7 +230,7 @@ Replay every prior Critical/High counterexample when feasible. Then record `hist
 
 ## Phase 4: evidence and finding ledgers
 
-Create `findings.json` using `schema/findings.json`. Every row contains:
+Create `findings.json` using `references/schema-findings.md`. Every row contains:
 
 - stable ID and concise finding;
 - internal status: `CONFIRMED`, `OVERSTATED`, `WRONG`, or `NOT VERIFIED`;
@@ -240,7 +240,7 @@ Create `findings.json` using `schema/findings.json`. Every row contains:
 - what the canonical reviewer contributed;
 - observable close condition, which must appear verbatim in the Decision reason for every blocker.
 
-Create `evidence-ledger.json` using `schema/evidence-ledger.json`. It must contain:
+Create `evidence-ledger.json` using `references/schema-evidence-ledger.md`. It must contain:
 
 - complete paginated job, trial, and review inventories;
 - task ID, scope (`current` or `prior`), source SHA, model/runtime, reward, status, artifact availability, and exclusion reason for every job/trial;
@@ -303,7 +303,7 @@ python3 scripts/emit_run_receipt.py \
   --task-id "$TASK_ID" --task-sha "$VALIDATION_SHA" \
   --skill-revision "$CRITIC_BUNDLE_COMMIT" \
   --output-path "$SCRATCH/internal-evidence.md"
-python3 scripts/adapters/agentcloud.py \
+python3 scripts/agentcloud_adapter.py \
   --session-id "$CRITIC_SESSION_ID" --run "$CRITIC_RUN" \
   --expected-role critic --allow-running-critic \
   --output "$SCRATCH/critic-run.json"

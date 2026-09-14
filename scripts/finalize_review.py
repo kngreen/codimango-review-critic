@@ -181,7 +181,7 @@ def validate_final_or_die(args: argparse.Namespace, manifest: dict) -> None:
 
 
 def validate_command_audit_or_die(audit: Path, manifest: dict) -> None:
-    validate_command_audit(audit, manifest, ROOT / "schema" / "command-policy.json")
+    validate_command_audit(audit, manifest, ROOT / "references" / "command-policy.md")
 
 
 if __name__ == "__main__":

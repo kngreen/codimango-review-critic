@@ -368,19 +368,21 @@ class Fixture:
             "status": status,
             "skill_revision": {
                 "critic": "d" * 40,
-                "canonical_primary": load_json(ROOT / "RELEASE.lock")["dependencies"][
-                    "aai-review-flow"
-                ],
-                "canonical_fallback": load_json(ROOT / "RELEASE.lock")["dependencies"][
-                    "team-aai-fbsource"
-                ],
-                "supplemental": load_json(ROOT / "RELEASE.lock")["dependencies"][
-                    "review-trials-and-spec"
-                ],
-                "ios": load_json(ROOT / "RELEASE.lock")["dependencies"]["aai-ios"],
-                "lh_addon": load_json(ROOT / "RELEASE.lock")["dependencies"][
-                    "aai-long-horizon"
-                ],
+                "canonical_primary": load_json(ROOT / "references" / "release-lock.md")[
+                    "dependencies"
+                ]["aai-review-flow"],
+                "canonical_fallback": load_json(
+                    ROOT / "references" / "release-lock.md"
+                )["dependencies"]["team-aai-fbsource"],
+                "supplemental": load_json(ROOT / "references" / "release-lock.md")[
+                    "dependencies"
+                ]["review-trials-and-spec"],
+                "ios": load_json(ROOT / "references" / "release-lock.md")[
+                    "dependencies"
+                ]["aai-ios"],
+                "lh_addon": load_json(ROOT / "references" / "release-lock.md")[
+                    "dependencies"
+                ]["aai-long-horizon"],
             }.get(role, "1" * 40),
             "task_id": TASK_ID,
             "task_sha": TASK_SHA,
@@ -564,7 +566,7 @@ def make_clean_bundle(parent: Path) -> Path:
     shutil.copytree(
         ROOT, target, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc")
     )
-    write_json(target / "schema" / "bundle-lock.json", seal_bundle(target))
+    write_json(target / "references" / "bundle-lock.md", seal_bundle(target))
     for command in (
         ["git", "init", "-q", "-b", "main"],
         ["git", "config", "user.email", "test@example.com"],
@@ -615,7 +617,7 @@ def item_i1(temp: Path) -> int:
     )
     expect_failure(
         lambda: preflight(dirty, temp / "scratch-dirty", temp / "dirty.json"),
-        "digest mismatch",
+        "tracked bundle files are dirty",
     )
     print("DIRECTION I1 STRICTER old=0 new=2")
     return 6
@@ -721,7 +723,7 @@ def item_i2(temp: Path) -> int:
     expect_failure(lambda: validate_dag(output_identity), "output identity")
     wrong_revision = copy.deepcopy(f.manifest)
     wrong_revision["runs"][1]["skill_revision"] = "0" * 40
-    expect_failure(lambda: validate_dag(wrong_revision), "differs from RELEASE.lock")
+    expect_failure(lambda: validate_dag(wrong_revision), "differs from release lock")
     bad_sha = copy.deepcopy(f.manifest)
     bad_sha["task"]["validation_sha"] = "short"
     expect_failure(lambda: validate_dag(bad_sha), "does not match")
@@ -1493,7 +1495,7 @@ def item_i6(temp: Path) -> int:
 
 def item_i7(temp: Path) -> int:
     f = Fixture(temp / "fixture")
-    policy = ROOT / "schema" / "command-policy.json"
+    policy = ROOT / "references" / "command-policy.md"
     cases = 1
     validate_command_audit(f.audit_path, f.manifest, policy)
     empty = temp / "empty.jsonl"
@@ -1655,10 +1657,11 @@ def item_i8(temp: Path) -> int:
     )
     cases += 1
     validate_release_lock(
-        ROOT / "RELEASE.lock", ROOT / "references" / "output-template.md"
+        ROOT / "references" / "release-lock.md",
+        ROOT / "references" / "output-template.md",
     )
     cases += 1
-    bad_lock = copy.deepcopy(load_json(ROOT / "RELEASE.lock"))
+    bad_lock = copy.deepcopy(load_json(ROOT / "references" / "release-lock.md"))
     bad_lock["dependencies"]["aai-review-flow"] = "master"
     bad_lock_path = temp / "bad-release.json"
     write_json(bad_lock_path, bad_lock)

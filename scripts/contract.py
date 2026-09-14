@@ -62,19 +62,13 @@ FALLBACKS = {
     ("tbench", "multi"): "team-aai:review-task-tbench-multiturn",
     ("swe", "multi"): "team-aai:review-task-swebench-multiturn",
 }
-RUNTIME_PREFIXES = (
-    "SKILL.md",
-    "README.md",
-    "RELEASE.lock",
-    ".github/",
-    "docs/",
-    "references/",
-    "scripts/",
-    "schema/",
-    "registry/",
-    "tests/",
-)
-RUNTIME_EXCLUDES = {"schema/bundle-lock.json"}
+RUNTIME_EXCLUDES = {
+    "references/bundle-lock.md",
+    "scripts/build_registry_package.py",
+    "scripts/contract_test.py",
+    "scripts/integration_test.py",
+    "scripts/materialize_fixtures.py",
+}
 
 FORBIDDEN_LANGUAGE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -278,13 +272,15 @@ def runtime_files(bundle: Path) -> list[Path]:
         if not path.is_file() or ".git" in path.parts or "__pycache__" in path.parts:
             continue
         rel = path.relative_to(bundle).as_posix()
-        if rel in RUNTIME_EXCLUDES or rel.endswith((".pyc", ".DS_Store")):
-            continue
-        if rel in RUNTIME_PREFIXES or any(
-            rel.startswith(prefix)
-            for prefix in RUNTIME_PREFIXES
-            if prefix.endswith("/")
-        ):
+        parts = path.relative_to(bundle).parts
+        supported = rel == "SKILL.md" or (
+            len(parts) == 2
+            and (
+                (parts[0] == "scripts" and path.suffix == ".py")
+                or (parts[0] == "references" and path.suffix == ".md")
+            )
+        )
+        if supported and rel not in RUNTIME_EXCLUDES:
             candidates.append(path)
     return sorted(candidates, key=lambda p: p.relative_to(bundle).as_posix())
 
@@ -304,7 +300,7 @@ def seal_bundle(bundle: Path) -> dict[str, Any]:
 
 
 def validate_bundle(bundle: Path) -> tuple[str, str, int]:
-    lock_path = bundle / "schema" / "bundle-lock.json"
+    lock_path = bundle / "references" / "bundle-lock.md"
     lock = load_json(lock_path)
     entries = lock.get("runtime_files")
     if not isinstance(entries, dict) or not entries:
@@ -332,7 +328,7 @@ def validate_bundle(bundle: Path) -> tuple[str, str, int]:
         if dirty:
             raise ContractError("PREFLIGHT REJECTED: tracked bundle files are dirty")
     else:
-        release = load_json(bundle / "RELEASE.lock")
+        release = load_json(bundle / "references" / "release-lock.md")
         release_name = str(release.get("release", ""))
         if re.fullmatch(r"\d+\.\d+\.\d+", release_name) is None:
             raise ContractError(
@@ -360,7 +356,7 @@ def preflight(bundle: Path, scratch_root: Path, receipt_path: Path) -> dict[str,
         "schema_version": 1,
         "bundle_commit": head,
         "bundle_tree": tree,
-        "bundle_lock_sha256": sha256_file(bundle / "schema" / "bundle-lock.json"),
+        "bundle_lock_sha256": sha256_file(bundle / "references" / "bundle-lock.md"),
         "template_sha256": sha256_file(bundle / "references" / "output-template.md"),
         "runtime_file_count": count,
         "scratch_root": str(scratch_root.resolve()),
@@ -490,7 +486,9 @@ def _validate_run_record(
 
 
 def validate_dag(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    validate_json_schema(manifest, load_json(ROOT / "schema" / "run-manifest-v2.json"))
+    validate_json_schema(
+        manifest, load_json(ROOT / "references" / "schema-run-manifest-v2.md")
+    )
     if manifest.get("schema_version") != 2:
         raise ContractError("run manifest schema_version must be 2")
     task = manifest.get("task")
@@ -591,7 +589,7 @@ def validate_dag(manifest: Mapping[str, Any]) -> dict[str, Any]:
     for role, run in by_role.items():
         if role != "critic" and run["parent_session_id"] != critic["session_id"]:
             raise ContractError(f"RUN DAG REJECTED: {role} is not a child of critic")
-    release = load_json(ROOT / "RELEASE.lock")
+    release = load_json(ROOT / "references" / "release-lock.md")
     expected_revisions = {
         "critic": manifest["bundle"]["commit"],
         "canonical_primary": release["dependencies"]["aai-review-flow"],
@@ -604,7 +602,7 @@ def validate_dag(manifest: Mapping[str, Any]) -> dict[str, Any]:
         expected_revision = expected_revisions.get(role)
         if expected_revision is not None and run["skill_revision"] != expected_revision:
             raise ContractError(
-                f"RUN DAG REJECTED: {role} skill revision differs from RELEASE.lock"
+                f"RUN DAG REJECTED: {role} skill revision differs from release lock"
             )
     primary = by_role.get("canonical_primary")
     if primary is None or primary["runner"] != "aai-review-flow":
@@ -955,7 +953,9 @@ def resolve_conditions(metadata: Mapping[str, Any]) -> dict[str, Any]:
 def validate_conditions(
     conditions: Mapping[str, Any], task_id: str, task_sha: str
 ) -> None:
-    validate_json_schema(conditions, load_json(ROOT / "schema" / "conditions.json"))
+    validate_json_schema(
+        conditions, load_json(ROOT / "references" / "schema-conditions.md")
+    )
     if conditions.get("schema_version") != 1:
         raise ContractError("condition schema_version must be 1")
     if (
@@ -974,7 +974,7 @@ def validate_conditions(
     if not isinstance(reasons, list):
         raise ContractError("CONDITION REJECTED: override reasons invalid")
     allowed_override_checks = set(
-        load_json(ROOT / "schema" / "live-form-payload.json").get(
+        load_json(ROOT / "references" / "schema-live-form-payload.md").get(
             "override_review_valid_checks", []
         )
     )
@@ -1003,7 +1003,7 @@ def validate_conditions(
 def validate_findings(
     data: Mapping[str, Any], task_id: str, task_sha: str
 ) -> Counter[str]:
-    validate_json_schema(data, load_json(ROOT / "schema" / "findings.json"))
+    validate_json_schema(data, load_json(ROOT / "references" / "schema-findings.md"))
     if data.get("schema_version") != 1:
         raise ContractError("findings schema_version must be 1")
     if str(data.get("task_id")) != str(task_id) or data.get("task_sha") != task_sha:
@@ -1131,7 +1131,9 @@ def _validate_pagination(
 def validate_supplemental(
     data: Mapping[str, Any], task_id: str, task_sha: str, max_summary_bytes: int = 12000
 ) -> set[str]:
-    validate_json_schema(data, load_json(ROOT / "schema" / "supplemental-output.json"))
+    validate_json_schema(
+        data, load_json(ROOT / "references" / "schema-supplemental-output.md")
+    )
     if (
         data.get("schema_version") != 1
         or str(data.get("task_id")) != str(task_id)
@@ -1187,7 +1189,9 @@ def validate_supplemental(
 def validate_evidence(
     ledger: Mapping[str, Any], findings: Mapping[str, Any], manifest: Mapping[str, Any]
 ) -> dict[str, int]:
-    validate_json_schema(ledger, load_json(ROOT / "schema" / "evidence-ledger.json"))
+    validate_json_schema(
+        ledger, load_json(ROOT / "references" / "schema-evidence-ledger.md")
+    )
     if ledger.get("schema_version") != 1:
         raise ContractError("evidence schema_version must be 1")
     task = ledger.get("task")
@@ -1508,7 +1512,7 @@ def validate_evidence(
 
 
 def load_review_format(path: Path | None = None) -> dict[str, Any]:
-    data = load_json(path or (ROOT / "schema" / "review-format.json"))
+    data = load_json(path or (ROOT / "references" / "schema-review-format.md"))
     if data.get("schema_version") != 2:
         raise ContractError("review format schema_version must be 2")
     return data
@@ -1846,7 +1850,9 @@ def render_review(
     findings: Mapping[str, Any],
     conditions: Mapping[str, Any],
 ) -> str:
-    validate_json_schema(review_data, load_json(ROOT / "schema" / "review-data.json"))
+    validate_json_schema(
+        review_data, load_json(ROOT / "references" / "schema-review-data.md")
+    )
     schema = load_review_format()
     task_id = str(review_data.get("task_id", ""))
     task_sha = review_data.get("task_sha")
@@ -1915,7 +1921,7 @@ def render_live_payload(
     findings: Mapping[str, Any],
     conditions: Mapping[str, Any],
 ) -> dict[str, Any]:
-    mapping = load_json(ROOT / "schema" / "live-form-payload.json")
+    mapping = load_json(ROOT / "references" / "schema-live-form-payload.md")
     if mapping.get("schema_version") != 1:
         raise ContractError("live-form payload mapping schema mismatch")
     sources: dict[str, Any] = {
@@ -2039,7 +2045,7 @@ def validate_live_payload(
         ):
             raise ContractError("live-form payload lacks Agentic run identity")
     override_reasons = conditions["validation_override"].get("reasons", [])
-    mapping = load_json(ROOT / "schema" / "live-form-payload.json")
+    mapping = load_json(ROOT / "references" / "schema-live-form-payload.md")
     allowed_override_checks = set(mapping.get("override_review_valid_checks", []))
     if any(
         reason.get("check") not in allowed_override_checks
@@ -2067,7 +2073,7 @@ def generate_template(schema: Mapping[str, Any]) -> str:
     lines = [
         "# Canonical Codimango review form contract",
         "",
-        "This file is generated from `schema/review-format.json`. Edit the schema, then run:",
+        "This file is generated from `references/schema-review-format.md`. Edit the schema, then run:",
         "",
         "`python3 scripts/generate_template.py --write`",
         "",
