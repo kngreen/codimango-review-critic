@@ -4,7 +4,7 @@ Evidence-first, task-isolated review of Codimango T-Bench, SWE-Bench, multi-turn
 
 The skill wraps canonical task reviewers in an executable protocol: sealed preflight, exact-revision binding, distinct reviewer sessions, complete evidence ledgers, conditional live-form fields, strict final validation, and byte-identical publication.
 
-Certified publication in `v0.2.2` requires an Agentcloud session and `agentcloudctl`, because run ownership and final approval are verified against the durable control-plane journal. Standalone process-only use may inspect the protocol but fails closed as `isolation_unverified`; it is not paste-ready.
+Certified publication in `v0.2.3` requires an Agentcloud session and `agentcloudctl`, because run ownership and final approval are verified against the durable control-plane journal. Standalone process-only use may inspect the protocol but fails closed as `isolation_unverified`; it is not paste-ready.
 
 ## Install a pinned release
 
@@ -12,7 +12,7 @@ Certified publication in `v0.2.2` requires an Agentcloud session and `agentcloud
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.2.2 \
+git clone --branch v0.2.3 \
   https://github.com/kngreen/codimango-review-critic.git \
   ~/.claude/skills/codimango-review-critic
 ```
@@ -21,7 +21,7 @@ git clone --branch v0.2.2 \
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone --branch v0.2.2 \
+git clone --branch v0.2.3 \
   https://github.com/kngreen/codimango-review-critic.git \
   ~/.codex/skills/codimango-review-critic
 ```
@@ -31,6 +31,8 @@ Start a fresh agent session for every distinct task, then invoke:
 ```text
 /codimango-review-critic https://codimango.internalmeta.com/reviews/TASK_ID
 ```
+
+Invoking `/codimango-review-critic` without a task runs the queue dispatcher. It first starts a single preflight-and-auth canary; only a successful canary unlocks parallel review dispatch.
 
 ## Prerequisites
 
@@ -129,7 +131,7 @@ python3 scripts/reviewctl.py preflight \
   --receipt "$SCRATCH/preflight.json"
 ```
 
-Expected output starts with `PREFLIGHT OK`. A dirty/tampered bundle, missing runtime file, nonempty scratch root, or scratch root inside the bundle fails closed.
+Expected output starts with `PREFLIGHT OK` and names the verified sandbox backend. A dirty/tampered bundle, missing runtime file, incomplete registry snapshot, unsupported sandbox, nonempty scratch root, or scratch root inside the bundle fails closed. Registry materializations are content-addressed from the sealed bundle lock and do not require a `.git` directory.
 
 ## Final validation
 
@@ -157,7 +159,7 @@ Only `FINALIZATION OK` from the attested critic session authorizes publication. 
 bash scripts/selftest.sh
 ```
 
-The suite runs 93 directional cases across all eight implementation items, including wrong-track fallback, duplicate sessions, blind/history inversion, conditional omission, native iOS evidence, template drift, exact-700-word rejection, semantic decision contradictions, foreign identifiers, phase-aware read-only violations, and bounded supplemental output.
+The suite runs 94 directional cases across all eight implementation items, including registry materialization without `.git`, wrong-track fallback, duplicate sessions, blind/history inversion, conditional omission, native iOS evidence, template drift, exact-700-word rejection, semantic decision contradictions, foreign identifiers, phase-aware read-only violations, and bounded supplemental output.
 
 After committing, run:
 
@@ -173,15 +175,26 @@ Update only to an intentional release tag:
 
 ```bash
 git -C ~/.claude/skills/codimango-review-critic fetch --tags
-git -C ~/.claude/skills/codimango-review-critic checkout v0.2.2
+git -C ~/.claude/skills/codimango-review-critic checkout v0.2.3
 ```
 
 Do not track mutable `main` for review-critical execution.
 
 ## Registry metadata
 
-[`registry/skill.json`](registry/skill.json) describes the same pinned release for Agentcloud/Metamate registration. GitHub publication and registry publication are separate operations; verify the registry copy against `schema/bundle-lock.json` before enabling it.
+[`registry/skill.json`](registry/skill.json) describes the same pinned release for Agentcloud/Metamate registration. GitHub publication and registry publication are separate operations. Always publish a whole-directory revision, never a hand-selected `SKILL.md`/references subset:
+
+```bash
+meta --local skills.sdk revise \
+  --alias=codimango-review-critic \
+  --dir=. \
+  --base-revision=REVISION_FROM_SKILLS_SDK_LOAD \
+  --revision-title='Release v0.2.3' \
+  --output=json
+```
+
+Load the resulting revision with `--content --out-dir`, verify every path in `schema/bundle-lock.json` exists, and run `reviewctl.py preflight` from that materialized copy before enabling the revision.
 
 ## Safety
 
-The skill is read-only by default. It does not submit feedback, rerun platform validation, modify task repositories, push task code, or contact authors. `audit_exec.py` prevalidates commands, mounts the task repository read-only in a Linux/macOS OS sandbox, disables network for arbitrary interpreters and shells, and records each command. `validate_command_audit.py` also blocks broad queue reads, pre-seal history reads, and mutation commands.
+The skill is read-only by default. It does not submit feedback, rerun platform validation, modify task repositories, push task code, or contact authors. `audit_exec.py` prevalidates commands and uses a transient systemd user service on Linux to make the filesystem read-only except for the review scratch root, bind the task repository read-only, remove capabilities, block namespace escape, and disable networking for arbitrary interpreters and shells. Linux user namespaces and macOS `sandbox-exec` remain fail-closed fallbacks. `validate_command_audit.py` also blocks broad queue reads, pre-seal history reads, and mutation commands.

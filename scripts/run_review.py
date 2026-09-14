@@ -19,7 +19,6 @@ from contract import (
     FULL_SHA,
     PHASE_ORDER,
     load_json,
-    preflight,
     sha256_file,
     utc_now,
     validate_bundle,
@@ -41,25 +40,25 @@ def atomic_write(path: Path, value: dict) -> None:
 
 
 def preflight_or_die(bundle: Path, scratch: Path, receipt: Path) -> dict:
-    if receipt.is_file():
-        value = load_json(receipt)
-        if value.get("verdict") != "PASS" or value.get("scratch_root") != str(
-            scratch.resolve()
-        ):
-            raise ContractError(
-                "existing preflight receipt does not match scratch root"
-            )
-        head, tree, count = validate_bundle(bundle)
-        if (
-            value.get("bundle_commit") != head
-            or value.get("bundle_tree") != tree
-            or value.get("runtime_file_count") != count
-        ):
-            raise ContractError(
-                "existing preflight receipt does not match current bundle"
-            )
-        return value
-    return preflight(bundle, scratch, receipt)
+    if not receipt.is_file():
+        raise ContractError(
+            "sandbox-attested preflight receipt is required; run reviewctl.py preflight first"
+        )
+    value = load_json(receipt)
+    if value.get("verdict") != "PASS" or value.get("scratch_root") != str(
+        scratch.resolve()
+    ):
+        raise ContractError("existing preflight receipt does not match scratch root")
+    if value.get("sandbox_backend") not in {"systemd", "unshare", "sandbox-exec"}:
+        raise ContractError("existing preflight receipt lacks sandbox attestation")
+    head, tree, count = validate_bundle(bundle)
+    if (
+        value.get("bundle_commit") != head
+        or value.get("bundle_tree") != tree
+        or value.get("runtime_file_count") != count
+    ):
+        raise ContractError("existing preflight receipt does not match current bundle")
+    return value
 
 
 def append_phase(manifest: dict, name: str, artifact: Path | None = None) -> None:

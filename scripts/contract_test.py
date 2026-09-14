@@ -24,6 +24,7 @@ from contract import (
     preflight,
     render_live_payload,
     render_review,
+    require_full_sha,
     resolve_conditions,
     seal_bundle,
     sha256_file,
@@ -277,6 +278,7 @@ class Fixture:
                     "bundle_commit": "d" * 40,
                     "bundle_tree": "e" * 40,
                     "scratch_root": str(self.scratch.resolve()),
+                    "sandbox_backend": "systemd",
                     "timestamp": timestamp(0),
                 },
                 sort_keys=True,
@@ -580,6 +582,14 @@ def item_i1(temp: Path) -> int:
     bundle = make_clean_bundle(temp / "one")
     scratch = temp / "scratch-good"
     preflight(bundle, scratch, temp / "preflight.json")
+    registry_bundle = make_clean_bundle(temp / "registry")
+    shutil.rmtree(registry_bundle / ".git")
+    registry_receipt = preflight(
+        registry_bundle,
+        temp / "scratch-registry",
+        temp / "preflight-registry.json",
+    )
+    require_full_sha(registry_receipt["bundle_commit"], "registry bundle identity")
     # A baseline without preflight has no rejection point: old=0.
     tampered = make_clean_bundle(temp / "two")
     (tampered / "scripts" / "lint_final_review.py").write_text(
@@ -608,7 +618,7 @@ def item_i1(temp: Path) -> int:
         "digest mismatch",
     )
     print("DIRECTION I1 STRICTER old=0 new=2")
-    return 5
+    return 6
 
 
 def legacy_wrong_fallback(temp: Path, fixture: Fixture) -> int:
@@ -1704,7 +1714,7 @@ ITEMS: dict[str, Callable[[Path], int]] = {
     "I7": item_i7,
     "I8": item_i8,
 }
-EXPECTED = {"I1": 5, "I2": 10, "I3": 5, "I4": 12, "I5": 19, "I6": 23, "I7": 11, "I8": 8}
+EXPECTED = {"I1": 6, "I2": 10, "I3": 5, "I4": 12, "I5": 19, "I6": 23, "I7": 11, "I8": 8}
 
 
 def main() -> int:

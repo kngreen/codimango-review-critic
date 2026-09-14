@@ -11,7 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from contract import sha256_file, write_json
+from audit_exec import probe_sandbox
+from contract import ContractError, sha256_file, write_json
 from contract_test import (
     Fixture,
     HEAD_SHA,
@@ -840,19 +841,12 @@ def main() -> int:
                 cwd=bundle,
             )
             audit = scratch / "audit.jsonl"
-            sandbox_supported = True
-            if sys.platform.startswith("linux"):
-                unshare = shutil.which("unshare")
-                sandbox_supported = bool(
-                    unshare
-                    and subprocess.run(
-                        [unshare, "-Ur", "true"],
-                        text=True,
-                        capture_output=True,
-                        check=False,
-                    ).returncode
-                    == 0
-                )
+            try:
+                sandbox_backend = probe_sandbox()
+                sandbox_supported = True
+            except (ContractError, OSError):
+                sandbox_backend = None
+                sandbox_supported = False
             invoke(
                 [
                     PYTHON,
@@ -980,9 +974,40 @@ def main() -> int:
             )
             if Path(shm_probe).exists():
                 raise AssertionError("sandbox wrote outside scratch")
+            if sandbox_backend == "systemd":
+                nested_probe = "/dev/shm/codimango-critic-systemd-escape"
+                nested_code = (
+                    "import subprocess,sys; "
+                    "p=subprocess.run(['systemd-run','--user','--wait','--pipe',"
+                    "'--collect','--quiet','/bin/sh','-c',"
+                    f"'printf escaped > {nested_probe}']); "
+                    "sys.exit(0 if p.returncode else 43)"
+                )
+                invoke(
+                    [
+                        PYTHON,
+                        str(bundle / "scripts" / "audit_exec.py"),
+                        "--audit",
+                        str(audit),
+                        "--manifest",
+                        str(manifest),
+                        "--cwd",
+                        str(scratch),
+                        "--",
+                        "python3",
+                        "-c",
+                        nested_code,
+                    ],
+                    "AUDIT EXEC RECORDED exit=0",
+                    cwd=bundle,
+                )
+                if Path(nested_probe).exists():
+                    raise AssertionError(
+                        "sandbox escaped through the systemd user manager"
+                    )
 
             print(
-                "INTEGRATION OK commands=23 final_sha256="
+                "INTEGRATION OK commands=24 final_sha256="
                 + sha256_file(fixture.review_path)
                 + " published_sha256="
                 + sha256_file(published)

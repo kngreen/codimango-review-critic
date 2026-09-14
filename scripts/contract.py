@@ -321,13 +321,29 @@ def validate_bundle(bundle: Path) -> tuple[str, str, int]:
     for rel, expected in entries.items():
         if current[rel] != expected:
             raise ContractError(f"PREFLIGHT REJECTED: digest mismatch for {rel}")
-    head = require_full_sha(git_output(bundle, "rev-parse", "HEAD"), "bundle git HEAD")
-    tree = require_full_sha(
-        git_output(bundle, "rev-parse", "HEAD^{tree}"), "bundle git tree"
-    )
-    dirty = git_output(bundle, "status", "--short", "--untracked-files=no")
-    if dirty:
-        raise ContractError("PREFLIGHT REJECTED: tracked bundle files are dirty")
+    if (bundle / ".git").exists():
+        head = require_full_sha(
+            git_output(bundle, "rev-parse", "HEAD"), "bundle git HEAD"
+        )
+        tree = require_full_sha(
+            git_output(bundle, "rev-parse", "HEAD^{tree}"), "bundle git tree"
+        )
+        dirty = git_output(bundle, "status", "--short", "--untracked-files=no")
+        if dirty:
+            raise ContractError("PREFLIGHT REJECTED: tracked bundle files are dirty")
+    else:
+        release = load_json(bundle / "RELEASE.lock")
+        release_name = str(release.get("release", ""))
+        if re.fullmatch(r"\d+\.\d+\.\d+", release_name) is None:
+            raise ContractError(
+                "PREFLIGHT REJECTED: registry bundle lacks release identity"
+            )
+        lock_digest = sha256_file(lock_path)
+        canonical_entries = json.dumps(entries, sort_keys=True, separators=(",", ":"))
+        head = hashlib.sha1(
+            f"skills-sdk:{release_name}:{lock_digest}".encode("utf-8")
+        ).hexdigest()
+        tree = hashlib.sha1(canonical_entries.encode("utf-8")).hexdigest()
     return head, tree, len(entries)
 
 
@@ -514,6 +530,12 @@ def validate_dag(manifest: Mapping[str, Any]) -> dict[str, Any]:
         != str(Path(manifest.get("scratch_root", "")).resolve())
     ):
         raise ContractError("run manifest bundle disagrees with preflight receipt")
+    if preflight_receipt.get("sandbox_backend") not in {
+        "systemd",
+        "unshare",
+        "sandbox-exec",
+    }:
+        raise ContractError("run manifest lacks sandbox-attested preflight")
     scratch = Path(str(manifest.get("scratch_root", "")))
     if not scratch.is_absolute() or not scratch.exists():
         raise ContractError("scratch_root must be an existing absolute directory")

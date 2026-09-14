@@ -1,11 +1,68 @@
 ---
 name: codimango-review-critic
-description: Evidence-first, task-isolated Codimango review for T-Bench, SWE-Bench, multi-turn, Long Horizon, and iOS. Uses a sealed blind pass, canonical and supplemental child sessions, exact-revision evidence, structured ledgers, conditional live-form fields, and verify-only publication.
+description: Evidence-first Codimango review. With no task it dispatches the assigned queue through a preflight canary, then one isolated reviewer per ready task. With a task ID or URL it runs the sealed single-task review protocol.
 ---
 
 # Codimango Review Critic
 
 Review the task, then review the reviewer. This skill is a protocol around the canonical reviewers, not a replacement for them.
+
+## Invocation modes
+
+### No task identifier: dispatcher
+
+The dispatcher enumerates assignments but never reviews a task itself.
+
+1. Attach the authenticated Codimango devserver. Never request or copy a credential.
+2. Run:
+
+   ```bash
+   export no_proxy="${no_proxy:-},.internalmeta.com"
+   codimango task list --reviewing --status being_reviewed \
+     --sort updated-at --dir asc --compact --json
+   ```
+
+3. Select only rows where `currentUserIsReviewer` is true, `status` is
+   `being_reviewed`, and `validationStatus` is neither missing nor `pending`.
+   Preserve each row's numeric `id` and `name` directly from JSON. Never
+   hand-transcribe or infer an ID.
+4. Before dispatching reviews, start one fresh **CANARY ONLY** session for the
+   first selected task. Pass only its numeric ID, this skill, and the canary
+   instruction below. Wait for `CANARY READY`. If it does not arrive, stop;
+   do not fan out a shared packaging, authentication, or sandbox failure.
+5. After the canary passes, start one fresh root session per task, passing only
+   that task's numeric ID and this skill. Never pass a queue row or sibling
+   identifier into a reviewer.
+6. Hide worker traffic with an explicit duration, for example
+   `meta agentcloud.ui snooze --session-id=<id> --duration=8h`.
+7. Report each validated verdict as it settles. Never submit the review.
+
+Create sessions with `agentcloudctl create --skill codimango-review-critic:always`.
+The canary prompt is:
+
+```text
+CANARY ONLY for task TASK_ID. Attach the authenticated Codimango devserver.
+Run sealed preflight and bootstrap, then use audit_exec.py for exactly one
+`codimango task show TASK_ID --json` read. Return `CANARY READY: TASK_ID` only
+if bundle integrity, registry materialization, authentication, and the OS
+sandbox all pass. Read no review prose and perform no review.
+```
+
+A normal reviewer prompt names exactly one numeric task ID, requires the
+complete workflow below, keeps the repository read-only, and submits nothing.
+The task link shown to the user is
+`https://codimango.internalmeta.com/reviews/<TASK-ID>`.
+
+### `CANARY ONLY` with one task identifier
+
+Run Phase 0 and bootstrap in an empty scratch root, then run exactly one audited
+`codimango task show TASK_ID --json`. Read no comments, reviews, trials, or
+repository content. Return `CANARY READY: TASK_ID` only after that command exits
+successfully; otherwise return the exact failing gate.
+
+### One task identifier: reviewer
+
+Review exactly that task. Never enumerate the queue or read another task.
 
 ## Non-negotiable rules
 
@@ -24,7 +81,7 @@ Review the task, then review the reviewer. This skill is a protocol around the c
 
 ## Runtime files and scratch layout
 
-The complete repository is required. `SKILL.md` alone is not sufficient. Outputs live outside both the skill repository and the task checkout:
+The complete released bundle is required; either a clean Git checkout or a content-addressed Skills SDK materialization is valid. `SKILL.md` alone is not sufficient. Outputs live outside both the skill bundle and the task checkout:
 
 ```text
 $SCRATCH/
@@ -61,7 +118,7 @@ python3 scripts/run_review.py bootstrap \
   --task-id "$TASK_ID"
 ```
 
-Required output includes `PREFLIGHT OK` and `REVIEW BOOTSTRAPPED`. Do not read task data first. Run every subsequent shell/CLI command through `scripts/audit_exec.py`; it prevalidates the command, executes it in an OS sandbox with the task repository mounted read-only, disables network for arbitrary interpreters/shells, and records the result. A host without the required Linux or macOS sandbox fails closed.
+Required output includes `PREFLIGHT OK`, the verified sandbox backend, and `REVIEW BOOTSTRAPPED`. Do not read task data first. Run every subsequent shell/CLI command through `scripts/audit_exec.py`; it prevalidates the command, executes it with the filesystem read-only except for scratch and the task repository explicitly bound read-only, disables network for arbitrary interpreters/shells, and records the result. Linux prefers a transient hardened systemd user service and falls back to user namespaces; macOS uses `sandbox-exec`. A host that cannot pass the actual write-blocking probe fails closed.
 
 ## Phase 1: freeze identity without review prose
 

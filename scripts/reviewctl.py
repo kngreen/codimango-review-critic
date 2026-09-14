@@ -88,8 +88,18 @@ def main() -> int:
                 args.scratch_root.resolve(),
                 args.receipt.resolve(),
             )
+            try:
+                from audit_exec import probe_sandbox
+
+                sandbox_backend = probe_sandbox()
+            except (ContractError, OSError, ValueError):
+                args.receipt.unlink(missing_ok=True)
+                raise
+            value["sandbox_backend"] = sandbox_backend
+            write_json(args.receipt, value)
             print(
-                f"PREFLIGHT OK files={value['runtime_file_count']} commit={value['bundle_commit']} tree={value['bundle_tree']}"
+                f"PREFLIGHT OK files={value['runtime_file_count']} commit={value['bundle_commit']} "
+                f"tree={value['bundle_tree']} sandbox={sandbox_backend}"
             )
         elif args.command == "validate-dag":
             result = validate_dag(load_json(args.manifest))

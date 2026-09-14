@@ -42,7 +42,92 @@ OFFLINE_BINARIES = {
 }
 
 
-def linux_sandbox(
+PASSTHROUGH_ENV = (
+    "AGENTCLOUD_ORCHESTRATOR_URL",
+    "ALL_PROXY",
+    "CURL_CA_BUNDLE",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "HOME",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "NO_PROXY",
+    "PATH",
+    "REQUESTS_CA_BUNDLE",
+    "SHELL",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "TZ",
+    "USER",
+    "X509_USER_PROXY",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+)
+
+
+def systemd_sandbox(
+    command: list[str], task_repo: Path, scratch: Path, cwd: Path
+) -> list[str]:
+    executable = shutil.which("systemd-run")
+    if executable is None:
+        raise ContractError("READ-ONLY REJECTED: systemd sandbox unavailable")
+    temp_root = scratch / "tmp"
+    cache_root = scratch / "cache"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    result = [
+        executable,
+        "--user",
+        "--wait",
+        "--pipe",
+        "--collect",
+        "--quiet",
+        "--property=ProtectSystem=strict",
+        "--property=ProtectHome=read-only",
+        "--property=ReadOnlyPaths=/",
+        f"--property=ReadWritePaths={scratch}",
+        f"--property=BindReadOnlyPaths={task_repo}",
+        "--property=ReadOnlyPaths=/dev/shm",
+        "--property=NoNewPrivileges=yes",
+        "--property=RestrictNamespaces=yes",
+        "--property=CapabilityBoundingSet=",
+        "--property=PrivateDevices=yes",
+        "--property=PrivateIPC=yes",
+        "--property=ProtectKernelTunables=yes",
+        "--property=ProtectKernelModules=yes",
+        "--property=ProtectControlGroups=yes",
+        "--property=RestrictSUIDSGID=yes",
+        "--property=LockPersonality=yes",
+        "--property=UMask=0077",
+        f"--working-directory={cwd}",
+        f"--setenv=TMPDIR={temp_root}",
+        f"--setenv=XDG_CACHE_HOME={cache_root}",
+        "--setenv=PYTHONDONTWRITEBYTECODE=1",
+    ]
+    if Path(command[0]).name in OFFLINE_BINARIES:
+        result.append("--property=PrivateNetwork=yes")
+    uid = os.getuid()
+    for path in (
+        Path(f"/run/user/{uid}/bus"),
+        Path(f"/run/user/{uid}/systemd/private"),
+    ):
+        if path.exists():
+            result.append(f"--property=InaccessiblePaths={path}")
+    for name in PASSTHROUGH_ENV:
+        if name in os.environ:
+            result.append(f"--setenv={name}")
+    result.extend(command)
+    return result
+
+
+def unshare_sandbox(
     command: list[str], task_repo: Path, scratch: Path, cwd: Path
 ) -> list[str]:
     if shutil.which("unshare") is None:
@@ -97,6 +182,24 @@ exec "$@"
     return result
 
 
+def linux_sandbox(
+    command: list[str],
+    task_repo: Path,
+    scratch: Path,
+    cwd: Path,
+    backend: str | None = None,
+) -> tuple[list[str], str]:
+    if backend == "systemd":
+        return systemd_sandbox(command, task_repo, scratch, cwd), "systemd"
+    if backend == "unshare":
+        return unshare_sandbox(command, task_repo, scratch, cwd), "unshare"
+    if backend is not None:
+        raise ContractError(f"READ-ONLY REJECTED: unknown Linux sandbox {backend}")
+    if shutil.which("systemd-run") is not None:
+        return systemd_sandbox(command, task_repo, scratch, cwd), "systemd"
+    return unshare_sandbox(command, task_repo, scratch, cwd), "unshare"
+
+
 def macos_sandbox(
     command: list[str], task_repo: Path, scratch: Path, cwd: Path
 ) -> list[str]:
@@ -132,6 +235,72 @@ def macos_sandbox(
     ]
 
 
+def probe_sandbox() -> str:
+    system = platform.system()
+    if system == "Linux":
+        candidates = []
+        if shutil.which("systemd-run") is not None:
+            candidates.append("systemd")
+        if shutil.which("unshare") is not None:
+            candidates.append("unshare")
+    elif system == "Darwin":
+        candidates = ["sandbox-exec"]
+    else:
+        raise ContractError(
+            f"READ-ONLY REJECTED: unsupported sandbox platform {system}"
+        )
+    failures = []
+    for backend in candidates:
+        with tempfile.TemporaryDirectory(prefix="critic-sandbox-probe.") as raw:
+            root = Path(raw)
+            scratch = root / "scratch"
+            task_repo = root / "task-repo"
+            outside = root / "outside"
+            scratch.mkdir()
+            task_repo.mkdir()
+            protected = task_repo / "protected"
+            protected.write_text("original\n", encoding="utf-8")
+            command = [
+                "/bin/sh",
+                "-c",
+                "set -eu; "
+                'test "$(cat "$1/protected")" = original; '
+                'if printf changed > "$1/protected" 2>/dev/null; then exit 41; fi; '
+                'if printf changed > "$3" 2>/dev/null; then exit 42; fi; '
+                'printf allowed > "$2/allowed"',
+                "sandbox-probe",
+                str(task_repo),
+                str(scratch),
+                str(outside),
+            ]
+            try:
+                if backend == "systemd":
+                    wrapped = systemd_sandbox(command, task_repo, scratch, scratch)
+                elif backend == "unshare":
+                    wrapped = unshare_sandbox(command, task_repo, scratch, scratch)
+                else:
+                    wrapped = macos_sandbox(command, task_repo, scratch, scratch)
+                proc = subprocess.run(
+                    wrapped, text=True, capture_output=True, check=False
+                )
+                if proc.returncode != 0:
+                    detail = (proc.stderr or proc.stdout).strip().splitlines()
+                    suffix = detail[-1] if detail else f"exit {proc.returncode}"
+                    raise ContractError(suffix)
+                if (
+                    protected.read_text(encoding="utf-8") != "original\n"
+                    or outside.exists()
+                ):
+                    raise ContractError("sandbox allowed an external write")
+                if (scratch / "allowed").read_text(encoding="utf-8") != "allowed":
+                    raise ContractError("sandbox blocked scratch writes")
+                return backend
+            except (ContractError, OSError, ValueError) as exc:
+                failures.append(f"{backend}: {exc}")
+    detail = "; ".join(failures) if failures else "no sandbox backend installed"
+    raise ContractError(f"READ-ONLY REJECTED: sandbox probe failed: {detail}")
+
+
 def resolve_executable(command: list[str], task_repo: Path, scratch: Path) -> list[str]:
     raw = command[0]
     if "/" in raw:
@@ -154,7 +323,7 @@ def resolve_executable(command: list[str], task_repo: Path, scratch: Path) -> li
 
 def sandboxed_command(
     command: list[str], manifest: dict, cwd: Path
-) -> tuple[list[str], str]:
+) -> tuple[list[str], str, str]:
     scratch = Path(manifest["scratch_root"]).resolve()
     task_repo_raw = manifest.get("task_repo_root")
     if not task_repo_raw:
@@ -169,10 +338,25 @@ def sandboxed_command(
     command = resolve_executable(command, task_repo, scratch)
     resolved_executable = command[0]
     system = platform.system()
+    receipt_path = manifest.get("bundle", {}).get("preflight_receipt_path")
+    sandbox_backend = None
+    if receipt_path:
+        sandbox_backend = load_json(Path(receipt_path)).get("sandbox_backend")
     if system == "Linux":
-        return linux_sandbox(command, task_repo, scratch, cwd), resolved_executable
+        wrapped, backend = linux_sandbox(
+            command, task_repo, scratch, cwd, sandbox_backend
+        )
+        return wrapped, resolved_executable, backend
     if system == "Darwin":
-        return macos_sandbox(command, task_repo, scratch, cwd), resolved_executable
+        if sandbox_backend not in (None, "sandbox-exec"):
+            raise ContractError(
+                f"READ-ONLY REJECTED: preflight selected {sandbox_backend} on macOS"
+            )
+        return (
+            macos_sandbox(command, task_repo, scratch, cwd),
+            resolved_executable,
+            "sandbox-exec",
+        )
     raise ContractError(f"READ-ONLY REJECTED: unsupported sandbox platform {system}")
 
 
@@ -190,7 +374,7 @@ def main() -> int:
         return 2
     try:
         manifest = load_json(args.manifest)
-        wrapped, resolved_executable = sandboxed_command(
+        wrapped, resolved_executable, sandbox_backend = sandboxed_command(
             command, manifest, args.cwd.resolve()
         )
         entry = {
@@ -206,6 +390,7 @@ def main() -> int:
             "writes": [str(Path(path).resolve()) for path in args.write],
             "exit_code": None,
             "sandbox": platform.system().lower(),
+            "sandbox_backend": sandbox_backend,
         }
         args.audit.parent.mkdir(parents=True, exist_ok=True)
         existing = args.audit.read_text(encoding="utf-8") if args.audit.exists() else ""
