@@ -28,10 +28,12 @@ The dispatcher enumerates assignments but never reviews a task itself.
    hand-transcribe or infer an ID.
 4. Before dispatching reviews, start one fresh **CANARY ONLY** session for the
    first selected task. Pass only its numeric ID, this skill, and the canary
-   instruction below. The canary also loads the plugin-only supplemental and
-   iOS skills in a short `claude_code` child without reading task data. Wait for
-   `CANARY READY`. If it does not arrive, stop; do not fan out a shared
-   packaging, authentication, sandbox, or plugin-routing failure.
+   instruction below. The canary also checks the plugin-only supplemental and
+   iOS lanes in short `claude_code` children without reading task data. The iOS
+   child must use the message-initial slash command because that skill disables
+   model invocation. Wait for `CANARY READY`. If it does not arrive, stop; do
+   not fan out a shared packaging, authentication, sandbox, or plugin-routing
+   failure.
 5. After the canary passes, start one fresh root session per task, passing only
    that task's numeric ID and this skill. Never pass a queue row or sibling
    identifier into a reviewer.
@@ -45,12 +47,13 @@ The canary prompt is:
 ```text
 CANARY ONLY for task TASK_ID. Attach the authenticated Codimango devserver.
 Run sealed preflight and bootstrap, then use audit_exec.py for exactly one
-`codimango task show TASK_ID --json` read. In a separate `claude_code` child on
-the same host, use the Skill tool to load
-`review-trials-and-spec:review-trials-and-spec` and `team-aai:aai-ios` without
-reading task data or running either review. Return `CANARY READY: TASK_ID` only
-if bundle integrity, registry materialization, authentication, the OS sandbox,
-and both plugin loads pass. Read no review prose and perform no review.
+`codimango task show TASK_ID --json` read. In one separate `claude_code` child
+on the same host, use the Skill tool to load
+`review-trials-and-spec:review-trials-and-spec`. In a second `claude_code`
+child, send the message-initial slash command `/team-aai:aai-ios help`; do not
+run a review. Return `CANARY READY: TASK_ID` only if bundle integrity, registry
+materialization, authentication, the OS sandbox, and both plugin checks pass.
+Read no review prose and perform no review.
 ```
 
 A normal reviewer prompt names exactly one numeric task ID, requires the
@@ -61,12 +64,13 @@ The task link shown to the user is
 ### `CANARY ONLY` with one task identifier
 
 Run Phase 0 and bootstrap in an empty scratch root, then run exactly one audited
-`codimango task show TASK_ID --json`. In a distinct `claude_code` child on the
-authenticated host, load `review-trials-and-spec:review-trials-and-spec` and
-`team-aai:aai-ios` with the Skill tool, but run neither workflow. Read no
-comments, reviews, trials, or repository content. Return `CANARY READY: TASK_ID`
-only after the task read and both plugin loads exit successfully; otherwise
-return the exact failing gate.
+`codimango task show TASK_ID --json`. In one distinct `claude_code` child on
+the authenticated host, load `review-trials-and-spec:review-trials-and-spec`
+with the Skill tool but do not run it. In a second `claude_code` child, send the
+message-initial slash command `/team-aai:aai-ios help`; the skill intentionally
+disables model invocation. Read no comments, reviews, trials, or repository
+content. Return `CANARY READY: TASK_ID` only after the task read and both plugin
+checks exit successfully; otherwise return the exact failing gate.
 
 ### One task identifier: reviewer
 
@@ -185,7 +189,7 @@ The primary `aai-review-flow` runner is a Skills SDK skill and may use a native 
 | SWE-Bench multi-turn | `team-aai:review-task-swebench-multiturn` |
 | Long Horizon | matching v2 fallback **and** `aai-long-horizon:lh-review-task` |
 
-Run `review-trials-and-spec:review-trials-and-spec` in another distinct `claude_code` child for every task. For iOS, also run `team-aai:aai-ios` with the `review` argument in a distinct `claude_code` child and apply `references/ios-harness-gate.md`. For Long Horizon, invoke `aai-long-horizon:lh-review-task` the same way. A missing Skills SDK alias is not evidence that these plugin skills are unavailable.
+Run `review-trials-and-spec:review-trials-and-spec` in another distinct `claude_code` child for every task. For iOS, create a distinct `claude_code` child whose first input is the slash command `/team-aai:aai-ios review` followed by the task brief; apply `references/ios-harness-gate.md`. The aai-ios skill intentionally disables model invocation, so a later model-issued Skill call is the wrong path. For Long Horizon, invoke `aai-long-horizon:lh-review-task` in its own plugin child. A missing Skills SDK alias is not evidence that these plugin skills are unavailable.
 
 Record each child from its durable Agentcloud journal. In the child, emit a receipt as the final tool command after its output is complete:
 
