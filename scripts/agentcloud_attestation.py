@@ -35,12 +35,20 @@ ROLE_SKILLS = {
 
 def successful_skill_load(session_id: str, run: int, skill: str) -> bool:
     frames = history_frames(session_id)
+    run_sequences = [
+        int(frame.get("seq", -1))
+        for frame in frames
+        if (frame.get("ctx") or {}).get("run") == run
+    ]
+    if not run_sequences:
+        return False
+    run_end = max(run_sequences)
     intents: set[int] = set()
     for frame in frames:
         event = frame.get("event", {})
         if event.get("type") != "tool_intent" or str(event.get("tool")) != "Skill":
             continue
-        if frame.get("ctx", {}).get("run") != run:
+        if int(frame.get("seq", -1)) > run_end:
             continue
         raw = event.get("input")
         if isinstance(raw, str):
@@ -56,7 +64,7 @@ def successful_skill_load(session_id: str, run: int, skill: str) -> bool:
         ):
             intents.add(int(frame.get("seq", -1)))
     if any(
-        frame.get("ctx", {}).get("run") == run
+        int(frame.get("seq", -1)) <= run_end
         and frame.get("event", {}).get("type") == "tool_result"
         and frame.get("event", {}).get("intent") in intents
         and frame.get("event", {}).get("outcome", {}).get("outcome") == "success"

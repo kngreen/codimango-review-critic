@@ -218,6 +218,8 @@ Use these exact receipt identities:
 | iOS | `ios` | `aai-ios` |
 | Long Horizon add-on | `lh_addon` | `aai-long-horizon:lh-review-task` |
 
+The receipt tool call must be one simple command: `python3` followed by the absolute `emit_run_receipt.py` path and its arguments. Do not prepend `cd`, use `&&`, pipes, redirects, `echo`, or wrap it in `bash -c`. Emit exactly one receipt in that run. If a receipt must be repaired in a later run of the same fresh task-only child, the adapter accepts the earlier successful skill activation but still requires exactly one valid receipt in the repair run.
+
 Then, from the critic, derive the run record from control-plane metadata rather than caller assertions:
 
 ```bash
@@ -234,7 +236,7 @@ Repeat this for supplemental and required add-ons. If a reviewer returns a contr
 
 If the supplemental runner remains unavailable after both its native alias and installed Claude Code plugin are attempted, emit an `unavailable` supplemental receipt, put the exact reason in `evidence-ledger.json.unresolved`, and set `evidence-ledger.json.supplemental` to the matching unavailable state with no descriptor. Continue without universal trial/spec claims and lower confidence. This exception applies only to the supplemental lane. A required iOS or Long Horizon add-on remains blocking when unavailable.
 
-Seal the blind pass only after every blind reviewer and required add-on has finished:
+Seal the blind pass only after every blind reviewer and required add-on has fully settled, each output has been read into the blind analysis, and every run record has been accepted by `agentcloud_adapter.py`. Never record `blind_sealed` while a child is still running or before its final output is incorporated:
 
 ```bash
 python3 scripts/run_review.py phase --manifest "$SCRATCH/run-manifest.json" \

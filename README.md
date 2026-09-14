@@ -4,7 +4,7 @@ Evidence-first, task-isolated review of Codimango T-Bench, SWE-Bench, multi-turn
 
 The skill wraps canonical task reviewers in an executable protocol: sealed preflight, exact-revision binding, distinct reviewer sessions, complete evidence ledgers, conditional live-form fields, strict final validation, and byte-identical publication.
 
-Certified publication in `v0.2.5` requires an Agentcloud session and `agentcloudctl`, because run ownership and final approval are verified against the durable control-plane journal. Standalone process-only use may inspect the protocol but fails closed as `isolation_unverified`; it is not paste-ready.
+Certified publication in `v0.2.6` requires an Agentcloud session and `agentcloudctl`, because run ownership and final approval are verified against the durable control-plane journal. Standalone process-only use may inspect the protocol but fails closed as `isolation_unverified`; it is not paste-ready.
 
 ## Install a pinned release
 
@@ -12,7 +12,7 @@ Certified publication in `v0.2.5` requires an Agentcloud session and `agentcloud
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.2.5 \
+git clone --branch v0.2.6 \
   https://github.com/kngreen/codimango-review-critic.git \
   ~/.claude/skills/codimango-review-critic
 ```
@@ -21,7 +21,7 @@ git clone --branch v0.2.5 \
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone --branch v0.2.5 \
+git clone --branch v0.2.6 \
   https://github.com/kngreen/codimango-review-critic.git \
   ~/.codex/skills/codimango-review-critic
 ```
@@ -141,7 +141,7 @@ Update only to an intentional release tag:
 
 ```bash
 git -C ~/.claude/skills/codimango-review-critic fetch --tags
-git -C ~/.claude/skills/codimango-review-critic checkout v0.2.5
+git -C ~/.claude/skills/codimango-review-critic checkout v0.2.6
 ```
 
 Do not track mutable `main` for review-critical execution.
@@ -157,7 +157,7 @@ meta --local skills.sdk revise \
   --alias=codimango-review-critic \
   --dir=/tmp/codimango-review-critic-registry \
   --base-revision=REVISION_FROM_SKILLS_SDK_LOAD \
-  --revision-title='Release v0.2.5' \
+  --revision-title='Release v0.2.6' \
   --output=json
 ```
 
