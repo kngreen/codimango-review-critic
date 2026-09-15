@@ -1,11 +1,126 @@
 ---
 name: codimango-review-critic
-description: Evidence-first second-pass review of Codimango T-Bench, SWE-Bench, multi-turn, and Long Horizon tasks. Use after a canonical task reviewer, or when asked to review a review, re-review a revised submission, reconcile prior feedback, or produce paste-ready Codimango feedback under 700 words. Verifies every finding against the exact task revision, reads all prior reviews, checks baselines and omitted surfaces, and preserves open or unverified caveats.
+description: Evidence-first second-pass review of Codimango T-Bench, SWE-Bench, multi-turn and Long Horizon tasks. Invoked with NO task it is the review dispatcher - it works the whole review queue itself and starts one isolated reviewer per task, without asking which. Invoked with a task name, id, UUID or submissions URL it reviews that one. Use after a canonical reviewer, to review a review, to re-review a revised submission, to work a review queue, or to produce paste-ready Codimango feedback under 700 words. Verifies every finding against the exact task revision, reads all prior reviews, checks baselines and omitted surfaces, and preserves open or unverified caveats.
 ---
+
+> **This skill is installed on a host.** The instructions below are the
+> judgement; anything they invoke lives on disk and is not delivered with this
+> skill. Find the installation before acting:
+>
+> ```bash
+> for d in "$SKILL_ROOT" "$HOME/.claude/skills/codimango-review-critic" "$HOME/.codex/skills/codimango-review-critic" "/home/kngreen/.claude/skills/codimango-review-critic"; do
+>   [ -n "$d" ] && [ -f "$d/scripts/selftest.sh" ] && export SKILL_ROOT="$d" && break
+> done
+> [ -f "$SKILL_ROOT/scripts/selftest.sh" ] || { echo "complete codimango-review-critic host installation not found"; exit 1; }
+> ```
+>
+> Where the body names `scripts`, read it from `$SKILL_ROOT/`. If nothing
+> above resolves you are not on a host where codimango-review-critic is installed: say so and
+> stop, rather than improvising a substitute.
+
 
 # Codimango Review Critic
 
 Review the task, then review the reviewer. This skill is a companion to the canonical track reviewers, not another copy of their rubrics.
+
+## Invoked with no task — you are the dispatcher
+
+Run one thin queue orchestrator. It may enumerate the queue, launch workers, supervise them, verify their links, and render the final table. It must never inspect task evidence or write a review itself.
+
+### Queue-run invariants
+
+- Exactly one fresh root reviewer session per selected task. Never create a second reviewer for the same task during the run.
+- Pass each worker only its numeric task ID and this skill. Do not pass a queue row, sibling identifier, finding, or draft.
+- A disconnected wait is reattached to the same session. It is not a reason to restart the review.
+- Never edit, revise, publish, pin, unpin, or repair this skill while a queue run is active.
+- If a shared dependency or preflight fails, stop the queue once and report the failure. Do not debug the skill by repeatedly redispatching tasks.
+- The dispatcher never runs canonical, supplemental, or iOS review lanes. Each task worker owns its complete internal review.
+
+### Preflight once, before any worker
+
+1. Attach the existing devserver where `codimango` is authenticated. This placement is required because the credential already lives there; never ask for or copy it. Record its node ID as `AUTH_NODE`.
+2. Resolve the host installation and run its self-test:
+
+   ```bash
+   for d in "$HOME/.claude/skills/codimango-review-critic" "$HOME/.codex/skills/codimango-review-critic" "/home/kngreen/.claude/skills/codimango-review-critic"; do
+     [ -f "$d/scripts/selftest.sh" ] && export SKILL_ROOT="$d" && break
+   done
+   [ -f "$SKILL_ROOT/scripts/selftest.sh" ] || { echo "complete codimango-review-critic host installation not found"; exit 1; }
+   bash "$SKILL_ROOT/scripts/selftest.sh"
+   ```
+
+3. Record the served skill revision with `meta skills.sdk load --alias=codimango-review-critic --output=json`. The dispatcher and all workers must use that same personally pinned revision for the entire run.
+4. Read the ready queue with the current CLI:
+
+   ```bash
+   export no_proxy="${no_proxy:-},.internalmeta.com"
+   codimango task list --reviewing --status being_reviewed \
+     --sort updated-at --dir asc --compact --limit 100 --json
+   ```
+
+Select only rows where `currentUserIsReviewer` is true, `status` is `being_reviewed`, and `validationStatus` is settled rather than missing or `pending`. A task in `needs_revision` is the author's move, not yours.
+
+Retain each selected row's exact numeric `id` and `name` directly from JSON. Persist that mapping; never hand-transcribe or infer an ID. The task link is `https://codimango.internalmeta.com/reviews/<id>`.
+
+### Launch exactly one worker per task
+
+For each selected row, create one root session atomically bound to the authenticated node:
+
+```bash
+SESSION_ID=$(agentcloudctl create \
+  --title "[review] <TASK-NAME>" \
+  --skill codimango-review-critic:always \
+  --node-id "$AUTH_NODE" \
+  --prompt "Review exactly one Codimango task: <TASK-ID>. Follow the codimango-review-critic single-task workflow. Keep the repository and platform read-only, draft every field, publish the validated Review and Evidence as durable Markdown pastes, and submit nothing. Never enumerate the queue, review another task, ask for a credential, or modify this skill.")
+meta agentcloud.ui snooze --session-id="$SESSION_ID" --duration=8h
+```
+
+Launch all selected workers once, then wait on those same session IDs with `agentcloudctl wait --until settle --output`. Parallel waits are allowed. A wait transport failure is retried against the same session ID; never create a replacement worker.
+
+Announce which tasks were selected before launch and report each result as it settles. Render every task name as `[<TASK-NAME>](https://codimango.internalmeta.com/reviews/<TASK-ID>)`.
+
+### Completion contract
+
+A worker is complete only when it returns this handoff with full, session-independent internal URLs:
+
+```text
+Task: [<TASK-NAME>](https://codimango.internalmeta.com/reviews/<TASK-ID>)
+Decision: <Accept | Request changes | Reject>
+Findings: <concise severity summary>
+Review: <full Phabricator Markdown paste URL>
+Evidence: <full Phabricator Markdown paste URL>
+Validation: <all gates passed | exact unavailable gates>
+```
+
+Do not relay `?dock=artifact:`, an artifact ID, or a workspace path. If a worker returns only session artifacts, send one correction to that same worker to publish its exact validated files; never reconstruct decision-bearing content in the dispatcher. Verify both paste URLs with `meta phabricator.paste describe` and `meta phabricator.paste read` before counting the task complete.
+
+When all workers settle, render exactly one final table containing completed reviews:
+
+| Task | Decision | Findings | Review | Evidence | Validation |
+|---|---|---|---|---|---|
+
+List blocked or failed workers once below the table with their exact reason and original session ID. Do not silently retry them and do not alter the skill during the run.
+
+**Enumerating here does not break task isolation.** Queue enumeration belongs only to this parent dispatcher. Having read the queue, do not review a task in this session.
+
+Most of a review queue is somebody else's repository. When a worker lacks a checkout, it clones the task's `sourceRepo` read-only rather than skipping the review.
+
+## Never ask for a credential
+
+**Do not ask the user for a token, cookie, OIDC value, API key, or any file containing one. Not to
+unblock yourself, not read-only, not once.** A credential pasted into a session is stored in that
+conversation, in its journal, and in anything that indexes either. No review is worth that, and a
+reviewer that asks for one has already failed safely-handled.
+
+If `codimango` cannot authenticate, you are in a fresh container rather than on the host where the
+credential lives. That is a placement problem, not an access problem:
+
+1. **Attach the devserver** where `codimango` is already authenticated, and retry once.
+2. If you cannot attach, stop and report `blocked: not on an authenticated host`. Name the task and
+   the exact command that failed.
+
+Do not open a login page, mint a token, or route around the missing credential. `codimango api
+keys` and the OAuth flow are the account owner's to run, in their own session, not a worker's.
 
 ## Hard rules
 
@@ -231,6 +346,43 @@ python3 scripts/validate_review_schema.py \
 ```
 
 Pass `--agentic-required` whenever the reviewed SHA exposes an Agentic Full-Task Review. Also pass every known non-current task or repository identifier to the language linter as `--forbid-token TOKEN`. Any canonical-execution, language-lint, or schema finding blocks delivery. Do not claim `paste-ready` unless all three validators exit 0.
+
+### Cross-session publication gate
+
+Session artifacts are working copies only. After validation, publish the exact canonical
+`FINAL.md` and private evidence report as separate durable Markdown pastes. Do not convert either
+to plain text, HTML, or another representation: preserving Markdown makes the review readable in
+Phabricator and easy to copy back into the Codimango form.
+
+```bash
+meta phabricator.paste create \
+  --title='Codimango review draft: TASK' --stdin --language=markdown --output=json < FINAL.md
+meta phabricator.paste create \
+  --title='Codimango review evidence: TASK' --stdin --language=markdown --output=json < EVIDENCE.md
+```
+
+Return the full paste URLs from those responses. Do not return `?dock=artifact:`, an artifact ID,
+a workspace path, or any other session-local reference as the only deliverable. The dispatcher
+must verify both returned paste IDs with `meta phabricator.paste describe --id=P123 --output=json`
+before counting the worker complete or reporting its verdict. It must verify that both pastes
+report `language: markdown` and read each back once with
+`meta phabricator.paste read --id=P123 --output=json`.
+
+After publication, return a short operator handoff outside the canonical review form with exactly
+these labeled lines:
+
+```text
+Task: [<TASK-NAME>](https://codimango.internalmeta.com/reviews/<TASK-ID>)
+Decision: <Accept | Request changes | Reject>
+Review: <full session-independent Markdown URL>
+Evidence: <full session-independent Markdown URL>
+Validation: <all gates passed | exact unavailable gates>
+```
+
+Do not add these fields to the canonical form or alter its schema. A dispatcher relaying the
+handoff must preserve all three links. Its summary table columns are `Task`, `Decision`,
+`Findings`, `Review`, `Evidence`, and `Validation`; the task name links directly to the Codimango
+review page, and there is no separate review-page column.
 
 Compression order:
 

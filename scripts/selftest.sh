@@ -7,6 +7,16 @@ trap 'rm -rf "$TMP"' EXIT
 
 python3 -m py_compile "$ROOT"/scripts/*.py
 
+grep -F 'codimango task list --reviewing --status being_reviewed' "$ROOT/SKILL.md" >/dev/null
+grep -F 'Exactly one fresh root reviewer session per selected task' "$ROOT/SKILL.md" >/dev/null
+grep -F 'Never edit, revise, publish, pin, unpin, or repair this skill while a queue run is active' "$ROOT/SKILL.md" >/dev/null
+grep -F 'complete codimango-review-critic host installation not found' "$ROOT/SKILL.md" >/dev/null
+grep -F '| Task | Decision | Findings | Review | Evidence | Validation |' "$ROOT/SKILL.md" >/dev/null
+if grep -F 'codimango api tasks list' "$ROOT/SKILL.md" >/dev/null; then
+  echo 'dispatcher still uses the removed codimango api command' >&2
+  exit 1
+fi
+
 cat >"$TMP/good.md" <<'EOF'
 ### Quality Review Agent
 - **Verdict:** Accept

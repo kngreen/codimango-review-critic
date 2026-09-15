@@ -34,13 +34,23 @@ If the canonical orchestrator and defined track fallback are both unavailable, t
 
 ## Use
 
-Invoke the skill with one task URL or identifier:
+Invoke without an argument to run the review queue:
+
+```text
+/codimango-review-critic
+```
+
+One dispatcher enumerates assigned, ready tasks; launches exactly one fresh root reviewer per task on the authenticated Codimango devserver; waits for those same session IDs; verifies each review and evidence Markdown paste; and returns one table with `Task`, `Decision`, `Findings`, `Review`, `Evidence`, and `Validation`.
+
+A queue run never edits or republishes the skill and never creates duplicate task workers. A shared preflight failure stops the queue before fan-out; an individual worker failure is reported once below the final table.
+
+Invoke with one task URL or identifier to review only that task:
 
 ```text
 /codimango-review-critic https://codimango.internalmeta.com/reviews/202761?review=ai-assessment
 ```
 
-Run every distinct task in a fresh agent session. The skill forbids broad review-queue reads and fetches same-task history directly from Codimango.
+Run every distinct task in a fresh agent session. The skill forbids broad review-queue reads inside task workers and fetches same-task history directly from Codimango.
 
 The output includes:
 
